@@ -446,6 +446,11 @@ if install_tests
                 endif
         endforeach
 
+        # The container migration integration test runs the plugin's host probe
+        # on the test machine; it looks for it next to the fixture estate.
+        install_data(meson.project_source_root() / 'plugins/systemd-migration/skills/discover-systemd-hosts/scripts/probe.sh',
+                     install_dir : testdata_dir / 'test-container-migration')
+
         install_data(kbd_model_map,
                      install_dir : testdata_dir + '/test-keymap-util')
 
