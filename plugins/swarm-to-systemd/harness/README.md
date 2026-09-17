@@ -27,7 +27,7 @@ There are two machines in play, and they hold different credentials.
 
 The **operator machine** has the `ant` CLI, a Claude API key or OAuth profile with access to the workspace, and this directory. It runs `swarm-agent apply`, `swarm-agent run`, `swarm-agent status`, and `swarm-agent connect`.
 
-The **production host** (a Swarm manager, or a target systemd host) runs `swarm-agent worker` under the provided unit as the unprivileged `swarm-agent` user, with `ProtectSystem=strict`, an empty capability bounding set, and a system-call filter. It holds only an environment key, delivered as an encrypted systemd credential, and never an organization API key; the worker refuses to start if it finds one in its environment. Tool calls from the agents execute here: file tools are confined to the workspace plus `allowed_roots` and refuse `denied_paths`, and bash on the agents that can change anything is gated by the approval policy. The docker group gives the auditor read access to the swarm; nothing grants root, so installing units, importing secrets, and live verification of rootful Podman remain operator steps from the runbook.
+The **production host** (a Swarm manager, or a target systemd host) runs `swarm-agent worker` under the provided unit as the unprivileged `swarm-agent` user, with `ProtectSystem=strict`, an empty capability bounding set, and a system-call filter. It holds only an environment key, delivered as an encrypted systemd credential, and never an organization API key; the worker refuses to start if it finds one in its environment. Tool calls from the agents execute here: file tools are confined to the workspace plus `allowed_roots` and refuse `denied_paths`, and bash on the agents that can change anything is gated by the approval policy. The worker user is deliberately not in the docker group, because that membership is root-equivalent and would void every hardening directive in the unit. The auditor reaches the swarm only through `DOCKER_HOST`, pointed at a read-only proxy in front of the manager socket (see below), or the operator runs the capture and drops the directory into the workspace. Nothing grants root, so installing units, importing secrets, and live verification of rootful Podman remain operator steps from the runbook.
 
 ## Setup
 
@@ -51,6 +51,14 @@ sudo bun run /opt/swarm-agent/harness/src/cli.ts doctor --host --config /etc/swa
 ```
 
 The installer copies the harness and the plugin skills to `/opt/swarm-agent`, writes `/etc/swarm-agent/swarm-agent.yaml` and `approvals.yaml` if they do not exist, and installs the unit and slice. Review `swarm-agent.yaml` on the host: `worker.workdir` is where every artifact lands, and `worker.allowed_roots` is the only way the file tools reach anything else.
+
+### Swarm access for the auditor
+
+The capture needs to read the Docker API on a manager, and the worker has no socket access of its own. Choose one of two arrangements:
+
+- **A read-only proxy.** Run a socket proxy on the manager that exposes only GET requests for the `info`, `version`, `nodes`, `services`, `tasks`, `networks`, `volumes`, `secrets`, `configs`, and `swarm` sections and rejects every POST, DELETE, and PUT (the widely used `docker-socket-proxy` image does this with `POST=0` and per-section flags). Bind it to loopback and set `DOCKER_HOST=tcp://127.0.0.1:2375` in `/etc/swarm-agent/worker.env`. The proxy, not the approval policy, is what stops a compromised or mistaken agent from creating containers, so keep write access disabled there even though the policy also denies `docker run`, `exec`, and `cp`.
+- **Operator-run capture.** Run `skills/swarm-capture/scripts/capture.sh` yourself on the manager, copy the directory into `worker.workdir`, and leave `DOCKER_HOST` unset. The auditor then normalizes and audits what you captured.
+
 
 ## Running a migration
 

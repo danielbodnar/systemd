@@ -6,11 +6,15 @@
 # user. It holds the environment key as a systemd credential and never an
 # organization API key.
 #
-# Access the agents need is granted by group membership, not by root: the
-# docker group for the read-only capture on a manager node, and nothing else
-# by default. Rootful Podman and system unit installation stay operator steps
-# in the runbook; the verifier's live mode on rootful Podman therefore runs
-# from the operator's shell, not from this worker.
+# The worker holds no supplementary groups. In particular it is never a member
+# of the docker group: that membership is root-equivalent (docker run
+# --privileged -v /:/host) and would void every hardening directive below.
+# The auditor reaches the swarm through DOCKER_HOST in worker.env, pointed at
+# a read-only proxy in front of the manager socket, or the operator runs the
+# capture and drops the directory into the workspace. Rootful Podman and
+# system unit installation stay operator steps in the runbook; the verifier's
+# live mode on rootful Podman therefore runs from the operator's shell, not
+# from this worker.
 #
 # Install: see install-worker.sh. Key: systemd-creds encrypt --name=environment-key
 #          - /etc/credstore.encrypted/swarm-agent.environment-key
@@ -28,7 +32,6 @@ Type=notify
 NotifyAccess=all
 User=swarm-agent
 Group=swarm-agent
-SupplementaryGroups=docker
 Slice=swarm-agent.slice
 WorkingDirectory=/opt/swarm-agent/harness
 ExecStart=/usr/local/bin/bun run src/cli.ts worker --config /etc/swarm-agent/swarm-agent.yaml

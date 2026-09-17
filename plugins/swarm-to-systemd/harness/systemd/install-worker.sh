@@ -37,10 +37,10 @@ systemd-sysusers /etc/sysusers.d/swarm-agent.conf
 install -d -m 0755 "$prefix" /etc/swarm-agent /etc/credstore.encrypted
 install -d -m 0750 -o swarm-agent -g swarm-agent /var/lib/swarm-agent /var/lib/swarm-agent/workspace /mnt/memory
 install -d -m 0700 /etc/swarm-migration/secrets
-if getent group docker >/dev/null; then
-    echo "swarm-agent joins the docker group so the auditor can read the swarm"
-else
-    echo "no docker group on this host; the worker unit's SupplementaryGroups=docker line is inert here"
+if [ -S /var/run/docker.sock ]; then
+    echo "note: swarm-agent is deliberately not in the docker group (that is root-equivalent);"
+    echo "      set DOCKER_HOST in /etc/swarm-agent/worker.env to a read-only socket proxy,"
+    echo "      or run the capture yourself and copy it into the workspace"
 fi
 rm -rf "$prefix/harness"
 cp -a "$source_dir" "$prefix/harness"

@@ -54,3 +54,19 @@ describe("shell operator handling", () => {
     expect(shellSegments("a; b && c || d | e & f\ng")).toEqual(["a", "b", "c", "d", "e", "f", "g"]);
   });
 });
+
+describe("container creation and exec", () => {
+  test("docker run, exec, and cp are denied whatever the flags", () => {
+    expect(evaluate(policy, "bash", { command: "docker run --privileged -v /:/host alpine chroot /host" }).decision).toBe("deny");
+    expect(evaluate(policy, "bash", { command: "docker exec -it web_app.1.abc sh" }).decision).toBe("deny");
+    expect(evaluate(policy, "bash", { command: "docker cp web_app.1.abc:/etc/shadow ." }).decision).toBe("deny");
+    expect(evaluate(policy, "bash", { command: "docker container create --privileged alpine" }).decision).toBe("deny");
+    expect(evaluate(policy, "bash", { command: "docker node promote wrk-1" }).decision).toBe("deny");
+    expect(evaluate(policy, "bash", { command: "podman exec pg sh" }).decision).toBe("deny");
+  });
+  test("read-only queries are still allowed", () => {
+    expect(evaluate(policy, "bash", { command: "docker service ps --no-trunc web_app" }).decision).toBe("allow");
+    expect(evaluate(policy, "bash", { command: "docker plugin ls" }).decision).toBe("allow");
+    expect(evaluate(policy, "bash", { command: "podman inspect pg" }).decision).toBe("allow");
+  });
+});

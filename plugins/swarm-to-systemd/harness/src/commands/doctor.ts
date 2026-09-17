@@ -80,6 +80,7 @@ export async function doctor(cfg: Config, opts: { host?: boolean }): Promise<num
       const p = await has(tool);
       if (p) ok(`${tool} at ${p}`);
       else if (tool === "docker") warn("docker not found; the auditor cannot capture from this host");
+      if (tool === "docker" && p && !process.env.DOCKER_HOST) warn("DOCKER_HOST unset; the worker has no socket access, so point it at a read-only proxy or copy a capture into the workspace");
       else if (tool === "podman" || tool === "systemd-analyze") warn(`${tool} not found; the verifier cannot run here`);
       else bad(`${tool} not found`);
     }

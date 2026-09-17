@@ -1,4 +1,4 @@
-# Approval policy applied by `swarm-agent run` to tool calls that pause for
+# Approval policy applied by `    match: '\b(docker\s+(run|exec|cp|create|start|restart|stop|kill|attach|commit|build|buildx|load|import|export|save|login|logout|compose|context|update|pause|unpause|rename|system\s+prune|container\s+(run|exec|cp|create|start|restart|stop|kill|rm|attach|commit|export|update|pause|unpause|rename|prune)|image\s+(rm|prune|push|load|import|build)|plugin\s+(install|rm|remove|enable|disable|upgrade|set)|(service|stack|node|swarm|network|volume|secret|config)\s+(update|deploy|rm|remove|create|leave|join|scale|prune|promote|demote|init|connect|disconnect))|systemctl-agent run` to tool calls that pause for
 # confirmation (permission policy `always_ask`, or `auto` with no server
 # determination). Rules are evaluated top to bottom; the first match wins, so
 # the deny rules come first and the allow rules cannot shadow them. `match` is
@@ -18,9 +18,12 @@ rules:
     decision: deny
     reason: secret values are off limits
   # Anything that changes the swarm or the host is denied outright; the
-  # runbook, not the agent, performs those steps.
+  # runbook, not the agent, performs those steps. Container creation and exec
+  # are included because, given any socket, they are a root-equivalent path
+  # onto the host (docker run --privileged -v /:/host), and the worker unit
+  # deliberately keeps swarm-agent out of the docker group for the same reason.
   - tool: bash
-    match: '\b(docker\s+(service|stack|node|swarm|network|volume|secret|config)\s+(update|deploy|rm|remove|create|leave|join|scale|prune)|systemctl\s+(start|stop|restart|enable|disable|daemon-reload|reset-failed)|podman\s+(run|rm|stop|kill|secret\s+create|system\s+reset)|install\.sh|import-secrets\.sh|rm\s+-rf|mkfs|dd\s+if=)'
+    match: '\b(docker\s+(run|exec|cp|create|start|restart|stop|kill|attach|commit|build|buildx|load|import|export|save|login|logout|compose|context|update|pause|unpause|rename|system\s+prune|container\s+(run|exec|cp|create|start|restart|stop|kill|rm|attach|commit|export|update|pause|unpause|rename|prune)|image\s+(rm|prune|push|load|import|build)|plugin\s+(install|rm|remove|enable|disable|upgrade|set)|(service|stack|node|swarm|network|volume|secret|config)\s+(update|deploy|rm|remove|create|leave|join|scale|prune|promote|demote|init|connect|disconnect))|systemctl\s+(start|stop|restart|enable|disable|daemon-reload|reset-failed)|podman\s+(run|exec|cp|create|start|restart|rm|stop|kill|attach|commit|build|load|import|export|save|login|secret\s+create|system\s+(reset|prune))|install\.sh|import-secrets\.sh|rm\s+-rf|mkfs|dd\s+if=)'
     decision: deny
     reason: mutating operation reserved for the operator runbook
   # Read-only swarm inspection is always fine.
