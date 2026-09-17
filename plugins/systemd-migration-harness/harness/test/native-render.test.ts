@@ -74,7 +74,7 @@ describe("native service renderer on the fixture estate", () => {
     expect(proxy).toContain("ExecStart=caddy run --config /etc/caddy/Caddyfile --adapter caddyfile");
     expect(proxy).toContain("ExecSearchPath=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin");
     expect(proxy).toContain("DynamicUser=yes");
-    expect(proxy).toContain("AmbientCapabilities=CAP_NET_BIND_SERVICE");
+    expect(proxy).toContain("AmbientCapabilities=CAP_NET_BIND_SERVICE\nNoNewPrivileges=yes");
     // postgres: image unknown, placeholder plus a note
     expect(unit("swarm-wrk-1", "data_postgres.service")).toContain("ExecStart=/bin/false");
     expect(result.notes.some((n) => n.startsWith("data_postgres:") && n.includes("placeholder"))).toBe(true);

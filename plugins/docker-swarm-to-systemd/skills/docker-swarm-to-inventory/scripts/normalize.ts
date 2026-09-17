@@ -4,7 +4,7 @@
 // normalize.ts: turn a capture directory produced by capture.sh into
 // inventory.json, the contract every systemd-dev-plugins skill consumes.
 //
-// Usage: bun normalize.ts <capture-dir> [-o inventory.json] [--keep-env-values]
+// Usage: bun normalize.ts <capture-dir> [-o inventory.json]
 //
 // No dependencies beyond Bun and the Node standard library, so it can run on
 // an operator laptop, in CI, or inside a Managed Agents sandbox.
@@ -463,13 +463,11 @@ if (import.meta.main) {
   const argv = process.argv.slice(2);
   let dir: string | undefined;
   let out = "inventory.json";
-  let keep = false;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "-o") out = argv[++i];
-    else if (a === "--keep-env-values") keep = true;
     else if (a === "-h" || a === "--help") {
-      console.log("usage: bun normalize.ts <capture-dir> [-o inventory.json] [--keep-env-values]");
+      console.log("usage: bun normalize.ts <capture-dir> [-o inventory.json] ");
       process.exit(0);
     } else dir = a;
   }
@@ -477,7 +475,7 @@ if (import.meta.main) {
     console.error("capture directory required");
     process.exit(2);
   }
-  const inv = normalize(dir, { keepEnvValues: keep });
+  const inv = normalize(dir);
   writeFileSync(out, JSON.stringify(inv, null, 2) + "\n");
   console.log(`wrote ${out}: ${inv.nodes.length} nodes, ${inv.stacks.length} stacks, ${inv.services.length} services, ${inv.networks.length} networks, ${inv.volumes.length} volumes, ${inv.secrets.length} secrets, ${inv.configs.length} configs`);
   for (const w of inv.warnings) console.log(`warning: ${w}`);

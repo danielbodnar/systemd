@@ -402,7 +402,8 @@ export function render(inv: Inventory, opts: RenderOptions = {}): RenderResult {
         if (caps.bounding.length) u.add("Service", "CapabilityBoundingSet", caps.bounding.join(" "));
         else u.addEmpty("Service", "CapabilityBoundingSet");
         if (caps.ambient.length) u.add("Service", "AmbientCapabilities", caps.ambient.join(" "));
-        u.add("Service", "NoNewPrivileges", caps.ambient.length ? null : "yes");
+        // Ambient capabilities are raised before exec and coexist with NoNewPrivileges=, so it is always set.
+        u.add("Service", "NoNewPrivileges", "yes");
         u.add("Service", "RestrictSUIDSGID", "yes");
         u.add("Service", "LockPersonality", "yes");
 

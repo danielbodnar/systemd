@@ -16,7 +16,7 @@ One row per inventory field the renderer reads. "Lossy" names what the unit cann
 | `healthcheck` | `<service>-health.timer` (`OnActiveSec=` start period, `OnUnitActiveSec=` interval), `<service>-health.service` (same root, `ExecStart=/bin/sh -c` with the retries, `TimeoutStartSec=`), `OnFailure=<service>-restart.service` | Equivalent: retries happen within one timer run rather than across runs. |
 | `resources.limits` | `CPUQuota=`, `MemoryMax=`, `TasksMax=` | |
 | `resources.reservations` | `MemoryLow=`, `CPUWeight=` | Reservations are soft in both systems. |
-| `cap_add`, `cap_drop` | `CapabilityBoundingSet=` (from Docker's default set), `AmbientCapabilities=`, `NoNewPrivileges=yes` when nothing is added | `privileged` is lossy: a note, never a directive. |
+| `cap_add`, `cap_drop` | `CapabilityBoundingSet=` (from Docker's default set), `AmbientCapabilities=`, `NoNewPrivileges=yes` always (ambient capabilities are raised before exec, so the two coexist) | `privileged` is lossy: a note, never a directive. |
 | `ulimits` | `LimitNOFILE=`, `LimitNPROC=`, and so on | `soft:hard` when they differ. |
 | `sysctls` | `/etc/sysctl.d/90-<stack>.conf`, no `ProtectKernelTunables=` | Lossy: sysctls apply to the whole host. |
 | `read_only` | `ProtectSystem=strict` | |

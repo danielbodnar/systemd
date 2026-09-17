@@ -7,18 +7,18 @@
 # for every object type Swarm manages and writes the JSON so that later steps
 # (normalize.ts, render.ts) can be re-run against the same evidence. Swarm
 # secret values are never readable through the API. Environment values whose
-# names look secret-bearing are redacted before the raw file is written, and
-# PreviousSpec (which repeats the environment) is dropped; pass --keep-env to
-# retain every value, in which case store the capture accordingly.
+# names or values look secret-bearing are redacted before the raw file is
+# written, and PreviousSpec (which repeats the environment) is dropped. There is
+# no switch to keep them: a capture is read by agents and archived, so it never
+# holds a value.
 #
-# Usage: capture.sh [-o OUTDIR] [-H DOCKER_HOST] [--compose-dir DIR] [--no-tasks] [--keep-env]
+# Usage: capture.sh [-o OUTDIR] [-H DOCKER_HOST] [--compose-dir DIR] [--no-tasks]
 
 set -euo pipefail
 
 outdir="swarm-capture-$(date -u +%Y%m%dT%H%M%SZ)"
 compose_dir=""
 capture_tasks=1
-keep_env=0
 secret_env_re='(pass(word)?|secret|token|api[_-]?key|private[_-]?key|credential|pwd|auth)'
 # Values are tested too: URI userinfo with a password, key=value pairs inside
 # a value, and command-line forms such as --password=x or -px. A bare
@@ -29,13 +29,12 @@ secret_flag_re='^-{1,2}(password|passwd|pwd|secret|token|api[_-]?key|auth)$'
 
 usage() {
     cat <<USAGE
-Usage: ${0##*/} [-o OUTDIR] [-H DOCKER_HOST] [--compose-dir DIR] [--no-tasks] [--keep-env]
+Usage: ${0##*/} [-o OUTDIR] [-H DOCKER_HOST] [--compose-dir DIR] [--no-tasks]
 
   -o OUTDIR        directory to write into (default: ${outdir})
   -H DOCKER_HOST   docker host to talk to (default: \$DOCKER_HOST or the local socket)
   --compose-dir    directory holding the stack compose files (*.yml, *.yaml only; .env files are never copied)
   --no-tasks       skip per-service task listing (faster on very large clusters)
-  --keep-env       keep every environment value in the raw capture (requires explicit intent)
 USAGE
 }
 
@@ -45,15 +44,14 @@ while [ $# -gt 0 ]; do
         -H) export DOCKER_HOST="$2"; shift 2 ;;
         --compose-dir) compose_dir="$2"; shift 2 ;;
         --no-tasks) capture_tasks=0; shift ;;
-        --keep-env) keep_env=1; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "unknown argument: $1" >&2; usage >&2; exit 2 ;;
     esac
 done
 
 command -v docker >/dev/null || { echo "docker CLI not found" >&2; exit 1; }
-if [ "$keep_env" -eq 0 ] && ! command -v jq >/dev/null; then
-    echo "jq is required to redact environment values; install it or pass --keep-env deliberately" >&2
+if ! command -v jq >/dev/null; then
+    echo "jq is required to redact environment values; install it" >&2
     exit 1
 fi
 
@@ -95,8 +93,7 @@ docker stack ls --format '{{json .}}' > "$raw/stacks.jsonl"
 
 docker service ls --format '{{json .}}' > "$raw/services.ls.jsonl"
 inspect_all service "$raw/services.json"
-if [ "$keep_env" -eq 0 ]; then
-    jq --arg re "$secret_env_re" --arg vre "$secret_value_re" --arg are "$secret_arg_re" --arg fre "$secret_flag_re" '
+jq --arg re "$secret_env_re" --arg vre "$secret_value_re" --arg are "$secret_arg_re" --arg fre "$secret_flag_re" '
         def redact_argv:
           if . == null then . else
             reduce .[] as $a ({out: [], hide: false};
@@ -115,8 +112,7 @@ if [ "$keep_env" -eq 0 ]; then
           | .Spec.TaskTemplate.ContainerSpec.Command |= redact_argv
           | .Spec.TaskTemplate.ContainerSpec.Args |= redact_argv
         )' "$raw/services.json" > "$raw/services.json.tmp"
-    mv "$raw/services.json.tmp" "$raw/services.json"
-fi
+mv "$raw/services.json.tmp" "$raw/services.json"
 
 # Image configuration (entrypoint, command, environment, working directory,
 # user) is not part of a service spec and is dropped by importctl pull-oci,
@@ -127,8 +123,8 @@ while IFS= read -r img; do
     [ -n "$img" ] || continue
     docker image inspect "$img" 2>/dev/null | jq -c ".[]" >> "$raw/images.jsonl" || true
 done < <(docker service ls --format "{{.Image}}" | sort -u)
-jq -s --arg re "$secret_env_re" --arg vre "$secret_value_re" --argjson keep "$keep_env" '
-    map(.Config.Env |= (if . and $keep == 0 then map(
+jq -s --arg re "$secret_env_re" --arg vre "$secret_value_re" '
+    map(.Config.Env |= (if . then map(
             (split("=")[0]) as $k | (.[($k | length) + 1:]) as $v
             | if ((($k | test("_FILE$")) and ($v | startswith("/"))) | not) and (($k | test($re; "i")) or ($v | test($vre; "i"))) then ($k + "=<redacted>") else . end
         ) else . end))' "$raw/images.jsonl" > "$raw/images.json"
@@ -180,7 +176,7 @@ cat > "$outdir/manifest.json" <<JSON
   "captured_node_id": "$(docker info --format '{{.Swarm.NodeID}}')",
   "docker_host": "${DOCKER_HOST:-local}",
   "tasks_captured": $capture_tasks,
-  "env_redacted": $((1 - keep_env)),
+  "env_redacted": 1,
   "compose_dir": "${compose_dir}",
   "tool": "docker-swarm-to-systemd/docker-swarm-to-inventory/capture.sh"
 }
