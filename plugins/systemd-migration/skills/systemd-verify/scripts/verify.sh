@@ -1,12 +1,25 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: LGPL-2.1-or-later
 #
-# verify.sh: check Quadlet units against expected.json, before or after install.
+# verify.sh: check a host's rendered or installed units against expected.json.
 #
-# Usage: verify.sh --expected expected.json [--units DIR] [--host NAME] [--dry-run | --live] [--json]
+# Usage: verify.sh --expected expected.json [--units DIR] [--host NAME]
+#                  [--engine native|quadlet] [--dry-run | --live] [--json]
 #
-# --dry-run runs the Quadlet generator and systemd-analyze on the given units
-# directory without touching the system. --live inspects the running system.
+# expected.json comes from the render driver: one entry per host with the
+# units, targets, slices, timers, mounts, sockets, machines, images,
+# credentials, volumes, and ports the host should carry (native engine), or
+# the units, containers, networks, volumes, and secrets of a Quadlet tree
+# (quadlet engine). The engine is read from the host's entry unless --engine
+# says otherwise.
+#
+# --dry-run checks the rendered tree without touching the system: every
+# expected file is present, systemd-analyze verify accepts the units (under
+# a temporary root with a stub for every command they name, so images that
+# are not pulled yet do not fail the check), and the images, credentials,
+# and volumes the units need are reported as present or still to import.
+# --live inspects the running system after install.sh: unit and machine
+# state, health results, listening ports, credentials, volumes, restart loops.
 
 set -uo pipefail
 
@@ -14,6 +27,7 @@ expected=""
 units_dir=""
 host="$(hostname)"
 mode="dry-run"
+engine=""
 json=0
 
 while [ $# -gt 0 ]; do
@@ -21,11 +35,12 @@ while [ $# -gt 0 ]; do
         --expected) expected="$2"; shift 2 ;;
         --units) units_dir="$2"; shift 2 ;;
         --host) host="$2"; shift 2 ;;
+        --engine) engine="$2"; shift 2 ;;
         --dry-run) mode="dry-run"; shift ;;
         --live) mode="live"; shift ;;
         --json) json=1; shift ;;
         -h|--help)
-            sed -n '4,10p' "$0"; exit 0 ;;
+            sed -n '4,22p' "$0"; exit 0 ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
 done
@@ -34,10 +49,24 @@ done
 [ -f "$expected" ] || { echo "expected file not found: $expected" >&2; exit 2; }
 command -v jq >/dev/null || { echo "jq is required" >&2; exit 2; }
 
-if ! jq -e --arg h "$host" '.hosts[$h]' "$expected" >/dev/null; then
-    echo "no plan for host $host in $expected (known: $(jq -r '.hosts | keys | join(", ")' "$expected"))" >&2
+# The native render driver keys hosts at the top level; the Quadlet renderer
+# keeps them under .hosts. Either way the host's entry is what is checked.
+host_entry='(if has("hosts") then .hosts else . end)[$h]'
+if ! jq -e --arg h "$host" "$host_entry" "$expected" >/dev/null; then
+    echo "no plan for host $host in $expected (known: $(jq -r '(if has("hosts") then .hosts else . end) | keys | join(", ")' "$expected"))" >&2
     exit 2
 fi
+if [ -z "$engine" ]; then
+    if jq -e --arg h "$host" "$host_entry | has(\"containers\")" "$expected" >/dev/null; then
+        engine="quadlet"
+    else
+        engine="native"
+    fi
+fi
+case "$engine" in
+    native|quadlet) ;;
+    *) echo "unknown engine: $engine (native or quadlet)" >&2; exit 2 ;;
+esac
 
 results=()
 fails=0
@@ -56,6 +85,193 @@ record() {
     fi
 }
 
+expect_list() {
+    # expect_list FIELD: the host's array FIELD, one entry per line, empty when absent
+    jq -r --arg h "$host" "$host_entry | .$1 // [] | .[]" "$expected"
+}
+
+mapfile -t exp_units < <(expect_list units)
+mapfile -t exp_ports < <(jq -r --arg h "$host" "$host_entry | .ports // [] | .[] | \"\(.port)/\(.protocol)\"" "$expected")
+mapfile -t exp_volumes < <(expect_list volumes)
+
+check_ports() {
+    local listening p port proto
+    listening="$(ss -ltunSH 2>/dev/null | awk '{print $1, $5}')"
+    for p in "${exp_ports[@]}"; do
+        port="${p%/*}"; proto="${p#*/}"
+        if echo "$listening" | awk -v port="$port" -v proto="$proto" '$1==proto && $2 ~ (":" port "$") {found=1} END{exit !found}'; then
+            record ok "port-listening" "$p"
+        else
+            record fail "port-listening" "$p not listening"
+        fi
+    done
+}
+
+check_restart_loops() {
+    local u restarts
+    for u in "${exp_units[@]}"; do
+        restarts="$(systemctl show -p NRestarts --value "$u" 2>/dev/null || echo 0)"
+        if [ "${restarts:-0}" -gt 3 ]; then
+            record warn "restart-loop" "$u restarted $restarts times"
+        fi
+    done
+}
+
+# ---------------------------------------------------------------- native ----
+
+# stub_commands ROOT UNIT...: create an executable under ROOT for the first
+# word of every Exec*= line so systemd-analyze --root can resolve it; a bare
+# name goes to /usr/bin. The units run inside an image that need not be
+# present on the host at verification time.
+stub_commands() {
+    local root="$1" line cmd unit
+    shift
+    for unit in "$@"; do
+        while IFS= read -r line; do
+            cmd="${line#*=}"
+            cmd="${cmd#[-+:!@]}"
+            cmd="${cmd%% *}"
+            [ -n "$cmd" ] || continue
+            case "$cmd" in
+                /*) ;;
+                *) cmd="/usr/bin/$cmd" ;;
+            esac
+            mkdir -p "$root$(dirname "$cmd")"
+            printf '#!/bin/sh\nexit 0\n' > "$root$cmd"
+            chmod +x "$root$cmd"
+        done < <(grep -E '^Exec(Start|StartPre|StartPost|Stop|StopPost|Reload|Condition)=' "$unit" 2>/dev/null || true)
+    done
+}
+
+native_dry_run() {
+    local tree u kind names=() tmp err m img c v
+    [ -n "$units_dir" ] || units_dir="/etc/systemd/system"
+    [ -d "$units_dir" ] || { echo "units directory not found: $units_dir" >&2; exit 2; }
+    tree="$(cd "$units_dir/../.." && pwd)"   # the host's etc/
+
+    for kind in units targets slices timers mounts sockets; do
+        while IFS= read -r u; do
+            [ -n "$u" ] || continue
+            if [ -f "$units_dir/$u" ]; then
+                record ok "unit-file" "$u present"
+                names+=("$u")
+            else
+                record fail "unit-file" "$u missing from $units_dir"
+            fi
+        done < <(expect_list "$kind")
+    done
+    while IFS= read -r m; do
+        [ -n "$m" ] || continue
+        if [ -f "$tree/systemd/nspawn/$m.nspawn" ]; then
+            record ok "machine-file" "$m.nspawn present"
+        else
+            record fail "machine-file" "$m.nspawn missing from $tree/systemd/nspawn"
+        fi
+    done < <(expect_list machines)
+
+    if command -v systemd-analyze >/dev/null; then
+        if [ "${#names[@]}" -gt 0 ]; then
+            tmp="$(mktemp -d)"
+            mkdir -p "$tmp/etc/systemd/system"
+            cp -a "$units_dir/." "$tmp/etc/systemd/system/"
+            stub_commands "$tmp" "$units_dir"/*.service
+            if err="$(systemd-analyze --root="$tmp" verify --recursive-errors=no "${names[@]}" 2>&1)"; then
+                record ok "systemd-analyze" "${#names[@]} units verified"
+            else
+                # Every line names the unit and the directive; an unknown key on an
+                # older systemd is the usual cause and the root-form decision the fix.
+                record fail "systemd-analyze" "$(echo "$err" | grep -v '^$' | sed "s|^$tmp||" | tr '\n' ';' | cut -c1-400)"
+            fi
+            rm -rf "$tmp"
+        fi
+    else
+        record warn "systemd-analyze" "not installed; skipping"
+    fi
+
+    while IFS= read -r img; do
+        [ -n "$img" ] || continue
+        if [ -e "$img" ]; then
+            record ok "image" "$img present"
+        else
+            record warn "image" "$img not pulled yet (run pull-images.sh before install.sh)"
+        fi
+    done < <(expect_list images)
+    while IFS= read -r c; do
+        [ -n "$c" ] || continue
+        if [ -e "/etc/credstore.encrypted/$c" ] || [ -e "/etc/credstore/$c" ]; then
+            record ok "credential" "$c in the credential store"
+        else
+            record warn "credential" "$c not yet imported (run secrets/import-credentials.sh before starting)"
+        fi
+    done < <(expect_list credentials)
+    for v in "${exp_volumes[@]}"; do
+        if [ -d "$v" ]; then
+            record ok "volume" "$v present"
+        else
+            record warn "volume" "$v absent; install.sh creates it through tmpfiles, move the data before starting"
+        fi
+    done
+    if [ -f "$tree/../install.sh" ]; then
+        if bash -n "$tree/../install.sh" 2>/dev/null; then
+            record ok "install-script" "install.sh parses"
+        else
+            record fail "install-script" "install.sh does not parse"
+        fi
+    fi
+}
+
+native_live() {
+    local u kind state result m c v
+    for kind in units targets slices timers mounts sockets; do
+        while IFS= read -r u; do
+            [ -n "$u" ] || continue
+            case "$u" in
+                *-health.service|*-restart.service)
+                    # Oneshot units driven by a timer are inactive between runs; their last result is what matters.
+                    result="$(systemctl show -p Result --value "$u" 2>/dev/null)"
+                    if [ "$result" = "success" ]; then
+                        record ok "unit-result" "$u last run succeeded"
+                    else
+                        record fail "unit-result" "$u last result is ${result:-unknown}"
+                    fi
+                    ;;
+                *)
+                    state="$(systemctl is-active "$u" 2>/dev/null || true)"
+                    if [ "$state" = "active" ]; then
+                        record ok "unit-active" "$u"
+                    else
+                        record fail "unit-active" "$u is ${state:-unknown} ($(systemctl show -p Result --value "$u" 2>/dev/null))"
+                    fi
+                    ;;
+            esac
+        done < <(expect_list "$kind")
+    done
+    while IFS= read -r m; do
+        [ -n "$m" ] || continue
+        state="$(machinectl show -p State --value "$m" 2>/dev/null || true)"
+        if [ "$state" = "running" ]; then
+            record ok "machine-running" "$m"
+        else
+            record fail "machine-running" "$m is ${state:-not registered}"
+        fi
+    done < <(expect_list machines)
+    check_ports
+    while IFS= read -r c; do
+        [ -n "$c" ] || continue
+        if [ -e "/etc/credstore.encrypted/$c" ] || [ -e "/etc/credstore/$c" ]; then
+            record ok "credential" "$c"
+        else
+            record fail "credential" "$c missing from the credential store"
+        fi
+    done < <(expect_list credentials)
+    for v in "${exp_volumes[@]}"; do
+        [ -d "$v" ] && record ok "volume" "$v" || record fail "volume" "$v missing"
+    done
+    check_restart_loops
+}
+
+# --------------------------------------------------------------- quadlet ----
+
 find_generator() {
     local g
     for g in /usr/lib/systemd/system-generators/podman-system-generator \
@@ -66,14 +282,9 @@ find_generator() {
     return 1
 }
 
-mapfile -t exp_units < <(jq -r --arg h "$host" '.hosts[$h].units[]' "$expected")
-mapfile -t exp_containers < <(jq -r --arg h "$host" '.hosts[$h].containers[]' "$expected")
-mapfile -t exp_ports < <(jq -r --arg h "$host" '.hosts[$h].ports[] | "\(.port)/\(.protocol)"' "$expected")
-mapfile -t exp_networks < <(jq -r --arg h "$host" '.hosts[$h].networks[]' "$expected")
-mapfile -t exp_volumes < <(jq -r --arg h "$host" '.hosts[$h].volumes[]' "$expected")
-mapfile -t exp_secrets < <(jq -r --arg h "$host" '.hosts[$h].secrets[]' "$expected")
-
-if [ "$mode" = "dry-run" ]; then
+quadlet_dry_run() {
+    local u base gen tmp err s
+    mapfile -t exp_secrets < <(expect_list secrets)
     [ -n "$units_dir" ] || units_dir="/etc/containers/systemd"
     [ -d "$units_dir" ] || { echo "units directory not found: $units_dir" >&2; exit 2; }
 
@@ -125,9 +336,13 @@ if [ "$mode" = "dry-run" ]; then
     else
         record fail "podman" "podman not installed on this host"
     fi
-fi
+}
 
-if [ "$mode" = "live" ]; then
+quadlet_live() {
+    local u state c health running n v s
+    mapfile -t exp_containers < <(expect_list containers)
+    mapfile -t exp_networks < <(expect_list networks)
+    mapfile -t exp_secrets < <(expect_list secrets)
     command -v podman >/dev/null || { record fail "podman" "podman not installed"; }
     for u in "${exp_units[@]}"; do
         state="$(systemctl is-active "$u" 2>/dev/null || true)"
@@ -151,15 +366,7 @@ if [ "$mode" = "live" ]; then
             record fail "container-exists" "$c not found"
         fi
     done
-    listening="$(ss -ltunSH 2>/dev/null | awk '{print $1, $5}')"
-    for p in "${exp_ports[@]}"; do
-        port="${p%/*}"; proto="${p#*/}"
-        if echo "$listening" | awk -v port="$port" -v proto="$proto" '$1==proto && $2 ~ (":" port "$") {found=1} END{exit !found}'; then
-            record ok "port-listening" "$p"
-        else
-            record fail "port-listening" "$p not listening"
-        fi
-    done
+    check_ports
     for n in "${exp_networks[@]}"; do
         podman network exists "$n" 2>/dev/null && record ok "network" "$n" || record fail "network" "$n missing"
     done
@@ -169,19 +376,21 @@ if [ "$mode" = "live" ]; then
     for s in "${exp_secrets[@]}"; do
         podman secret exists "$s" 2>/dev/null && record ok "secret" "$s" || record fail "secret" "$s missing"
     done
-    for u in "${exp_units[@]}"; do
-        restarts="$(systemctl show -p NRestarts --value "$u" 2>/dev/null || echo 0)"
-        if [ "${restarts:-0}" -gt 3 ]; then
-            record warn "restart-loop" "$u restarted $restarts times"
-        fi
-    done
-fi
+    check_restart_loops
+}
+
+case "$engine-$mode" in
+    native-dry-run) native_dry_run ;;
+    native-live) native_live ;;
+    quadlet-dry-run) quadlet_dry_run ;;
+    quadlet-live) quadlet_live ;;
+esac
 
 if [ "$json" -eq 1 ]; then
-    printf '%s\n' "${results[@]}" | jq -s --arg host "$host" --arg mode "$mode" --argjson fails "$fails" --argjson warns "$warns" \
-        '{host:$host, mode:$mode, failures:$fails, warnings:$warns, checks:.}'
+    printf '%s\n' "${results[@]}" | jq -s --arg host "$host" --arg mode "$mode" --arg engine "$engine" --argjson fails "$fails" --argjson warns "$warns" \
+        '{host:$host, mode:$mode, engine:$engine, failures:$fails, warnings:$warns, checks:.}'
 else
-    echo "host=$host mode=$mode checks=${#results[@]} failures=$fails warnings=$warns"
+    echo "host=$host engine=$engine mode=$mode checks=${#results[@]} failures=$fails warnings=$warns"
 fi
 
 [ "$fails" -eq 0 ]

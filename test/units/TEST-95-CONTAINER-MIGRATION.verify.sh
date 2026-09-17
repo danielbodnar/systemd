@@ -70,7 +70,7 @@ for host in "$RENDERED"/hosts/*/; do
             *-health.service|*-restart.service) continue ;;
         esac
         grep "^\[X-Migration\]" "$unit" >/dev/null
-        grep "^Renderer=docker-image-to-service" "$unit" >/dev/null
+        grep "^Renderer=systemd-service" "$unit" >/dev/null
         grep -E "^Root(MStack|Image)=/var/lib/machines/" "$unit" >/dev/null
     done
     if compgen -G "$host/etc/tmpfiles.d/*.conf" >/dev/null; then
@@ -84,5 +84,25 @@ for host in "$RENDERED"/hosts/*/; do
     bash -n "$host/install.sh"
     bash -n "$host/secrets/import-credentials.sh"
     jq -e '.units | length > 0' "$host/expected.json" >/dev/null
+
+    # The plugin's verifier makes the same checks from expected.json in
+    # dry-run: every expected file present, the units accepted by
+    # systemd-analyze, and the images, credentials, and volumes reported as
+    # still to import (warnings, never failures, before install.sh).
+    bash "$FIXTURE/verify.sh" --expected "$RENDERED/expected.json" --host "$name" --units "$units" --dry-run --json >"$WORK/$name.verify.json"
+    jq -e '.engine == "native" and .failures == 0' "$WORK/$name.verify.json" >/dev/null
+    jq -e '[.checks[] | select(.check == "systemd-analyze")] | length == 1 and all(.status == "ok")' "$WORK/$name.verify.json" >/dev/null
+    jq -e '[.checks[] | select(.check == "credential")] | all(.status == "warn")' "$WORK/$name.verify.json" >/dev/null
+
+    # A tree with a unit removed fails the verifier and exits non-zero.
+    broken="$WORK/$name-broken"
+    mkdir -p "$broken"
+    cp "$units"/* "$broken/"
+    rm "$broken/$(jq -r '.targets[0]' "$host/expected.json")"
+    if bash "$FIXTURE/verify.sh" --expected "$RENDERED/expected.json" --host "$name" --units "$broken" --dry-run --json >"$WORK/$name.broken.json"; then
+        echo "verifier accepted a tree with a missing target" >&2
+        exit 1
+    fi
+    jq -e '.failures >= 1 and any(.checks[]; .check == "unit-file" and .status == "fail")' "$WORK/$name.broken.json" >/dev/null
     echo "verified $name"
 done
