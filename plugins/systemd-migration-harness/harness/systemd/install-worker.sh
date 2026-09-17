@@ -67,7 +67,9 @@ for plugin in "$plugins_dir"/*/; do
 done
 # The lockfile is the single source of truth for what runs here: a mismatch
 # fails the install rather than resolving fresh from the registry.
-(cd "$prefix/harness" && "$bun_bin" install --frozen-lockfile --production)
+# --ignore-scripts: nothing here needs a lifecycle hook, and this runs as root,
+# so no dependency gets to execute one, whatever a future lockfile carries.
+(cd "$prefix/harness" && "$bun_bin" install --frozen-lockfile --production --ignore-scripts)
 
 [ -f /etc/swarm-agent/swarm-agent.yaml ] || install -m 0640 -g swarm-agent "$source_dir/swarm-agent.yaml" /etc/swarm-agent/swarm-agent.yaml
 [ -f /etc/swarm-agent/approvals.yaml ] || install -m 0640 -g swarm-agent "$source_dir/approvals.yaml" /etc/swarm-agent/approvals.yaml
@@ -93,6 +95,11 @@ sed "s#/opt/swarm-agent/harness#$prefix/harness#; s#/usr/local/bin/bun#$bun_bin#
     "$source_dir/systemd/swarm-agent-tools.service" > /etc/systemd/system/swarm-agent-tools.service
 install -m 0644 "$source_dir/systemd/swarm-agent.slice" /etc/systemd/system/swarm-agent.slice
 systemctl daemon-reload
-systemd-analyze verify swarm-agent-tools.service swarm-agent-worker.service || true
+if ! systemd-analyze verify swarm-agent-tools.service swarm-agent-worker.service; then
+    echo "unit verification failed; the units above were not enabled and are being removed" >&2
+    rm -f /etc/systemd/system/swarm-agent-worker.service /etc/systemd/system/swarm-agent-tools.service /etc/systemd/system/swarm-agent.slice
+    systemctl daemon-reload
+    exit 1
+fi
 echo "installed. start with: systemctl enable --now swarm-agent-tools.service swarm-agent-worker.service"
 echo "check with:            $bun_bin run $prefix/harness/src/cli.ts doctor --host --config /etc/swarm-agent/swarm-agent.yaml"
