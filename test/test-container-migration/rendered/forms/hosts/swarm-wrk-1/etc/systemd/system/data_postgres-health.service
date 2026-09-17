@@ -1,0 +1,23 @@
+# Rendered by systemd-migration: healthcheck of service data_postgres, run by data_postgres-health.timer
+
+[Unit]
+Description=healthcheck for data_postgres
+After=data_postgres.service
+BindsTo=data_postgres.service
+OnFailure=data_postgres-restart.service
+
+[Service]
+Type=oneshot
+Slice=stack-data.slice
+RootMStack=/var/lib/machines/library-postgres_16.4.mstack
+MountAPIVFS=yes
+PrivateUsers=self
+DynamicUser=yes
+CapabilityBoundingSet=
+NoNewPrivileges=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+ProtectProc=invisible
+ExecStart=/bin/sh -c "for i in $(seq 5); do if ( pg_isready -U app ); then exit 0; fi; sleep 1; done; exit 1"
+TimeoutStartSec=30
+SyslogIdentifier=data_postgres-health

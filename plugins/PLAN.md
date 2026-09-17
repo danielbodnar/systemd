@@ -351,9 +351,10 @@ render step is checked separately by `bun test`):
 | `.mstack.sh` | builds a mount stack from two `create_dummy_container` layers, renders a `RootMStack=` service, starts it, asserts the process sees the merged tree and the credentials directory | `create_dummy_container`, `assert_*` |
 | `.nspawn.sh` | renders `.nspawn` files and `systemd-nspawn@` instances, starts a machine with `Zone=`, waits for registration, checks `host0` got an address from the zone bridge and that `Port=` forwards | `create_dummy_container`, `wait_for_machine`, `machinectl` |
 | `.networkd.sh` | copies the rendered `.netdev` and `.network` files into `/run/systemd/network`, reloads, and asserts with `networkctl status --json` that the zone bridge carries the IPAM subnet, the static leases exist, the vxlan sits on the wireguard link, and `mv-*` inside a machine gets an address | `networkctl`, the `25-container-*` fixtures |
-| `.dnssd.sh` | resolves a service name across two machines through the zone bridge's lease domain and mDNS | the pattern from `TEST-89-RESOLVED-MDNS.sh` |
+| `.dnssd.sh` | installs the rendered `.dnssd` files and the resolved drop-in from `rendered/forms`, restarts resolved, and checks one DNS-SD service is registered per file with mDNS and LLMNR on | `resolvectl`, `busctl` |
+| `.journald.sh` | installs `journald@web.conf` from `rendered/forms`, writes through a unit with the stack's `LogNamespace=`, and checks the message lands in the namespace journal and not the host's | `journalctl --namespace` |
 | `.portable.sh` | attaches the rendered portable directory with the `strict` profile and checks the unit runs | `install_extension_images` |
-| `.sysext.sh` | merges a rendered confext built from the fixture configs and checks `/etc/<stack>/` appears with the recorded ownership | the pattern from `TEST-50-DISSECT.sysext.sh` |
+| `.sysext.sh` | stages the confext `rendered/forms` carries for the web stack, applies the ownership manifest from `install.sh`, merges it, and checks `/etc/web/configs/` appears with the recorded mode and disappears on unmerge | `systemd-confext` |
 | `.capsule.sh` | starts `capsule@stack.service` with the rendered user units | the pattern from `TEST-74-AUX-UTILS.capsule.sh` |
 | `.vmspawn.sh` | skips with 77 without qemu; otherwise boots the rendered DDI and waits for the machine | `find_qemu_binary`, `wait_for_machine` |
 | `.verify.sh` | runs `systemd-analyze verify` over every rendered unit and the plugin's verifier in dry-run per host | `systemd-analyze` |
@@ -402,9 +403,10 @@ and the integration subtests passing under
    the Podman discovery adapter. Done.
 8. **Documentation and harness.** Agents, commands, tasks, approvals, the
    docs page, this plan. Done alongside the phases above.
-9. **Remaining subtests.** `.dnssd.sh`, `.portable.sh`, `.sysext.sh`,
-   `.capsule.sh`, `.vmspawn.sh` from the table in section 5, each behind the
-   component that renders its input.
+9. **Remaining subtests.** `.dnssd.sh`, `.sysext.sh`, and `.journald.sh` run
+   against `rendered/forms`, a third committed tree from `plan-forms.yaml`.
+   `.portable.sh`, `.capsule.sh`, and `.vmspawn.sh` wait on the portable
+   component rendering an attachable image and on a bootable fixture image.
 
 ## 8. Decisions taken
 
@@ -436,10 +438,10 @@ composition engine, every component's decisions and rendering (plain services,
 machines, virtual machines, Quadlet containers, zone bridges and transports,
 discovery, credentials, storage, journal settings, confexts, portable
 services), the probe, the verifier, and the surface coverage;
-`plugins/scripts/render-fixtures.sh --check` guards the committed native and
-machine fixture trees; `TEST-95-CONTAINER-MIGRATION` runs `.inventory.sh`,
-`.mstack.sh`, `.nspawn.sh`, `.networkd.sh`, `.verify.sh`, and `.probe.sh` on a
-booted image.
+`plugins/scripts/render-fixtures.sh --check` guards the committed native,
+machine, and forms fixture trees; `TEST-95-CONTAINER-MIGRATION` runs `.inventory.sh`,
+`.mstack.sh`, `.nspawn.sh`, `.networkd.sh`, `.dnssd.sh`, `.sysext.sh`,
+`.journald.sh`, `.verify.sh`, and `.probe.sh` on a booted image.
 
 The first pull request (`claude/swarm-to-systemd-agent-gcqvex`) carries the
 first generation: the four source-named plugins, the directive catalogue, the

@@ -1,0 +1,33 @@
+{
+  "hostname": "swarm-mgr-1",
+  "units": [
+    "web_proxy.service"
+  ],
+  "targets": [
+    "web.target"
+  ],
+  "slices": [
+    "stack-web.slice"
+  ],
+  "timers": [],
+  "mounts": [],
+  "sockets": [],
+  "machines": [],
+  "containers": [],
+  "secrets": [],
+  "networks": [
+    "web_frontend"
+  ],
+  "ports": [
+    {
+      "port": 80,
+      "protocol": "tcp"
+    }
+  ],
+  "credentials": [],
+  "images": [
+    "/var/lib/machines/library-caddy_2.mstack"
+  ],
+  "volumes": [],
+  "root_kind": "RootMStack"
+}

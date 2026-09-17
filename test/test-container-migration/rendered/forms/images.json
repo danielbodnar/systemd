@@ -1,0 +1,42 @@
+{
+  "acme-app_2026.09": {
+    "ref": "registry.example.com/acme/app:2026.09",
+    "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000002",
+    "hosts": [
+      "swarm-wrk-1"
+    ],
+    "services": [
+      "web_app"
+    ]
+  },
+  "library-caddy_2": {
+    "ref": "docker.io/library/caddy:2",
+    "digest": null,
+    "hosts": [
+      "swarm-mgr-1"
+    ],
+    "services": [
+      "web_proxy"
+    ]
+  },
+  "library-postgres_16.4": {
+    "ref": "docker.io/library/postgres:16.4",
+    "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000003",
+    "hosts": [
+      "swarm-wrk-1"
+    ],
+    "services": [
+      "data_postgres"
+    ]
+  },
+  "prometheuscommunity-postgres-exporter_v0.15.0": {
+    "ref": "quay.io/prometheuscommunity/postgres-exporter:v0.15.0",
+    "digest": null,
+    "hosts": [
+      "swarm-wrk-1"
+    ],
+    "services": [
+      "data_exporter"
+    ]
+  }
+}

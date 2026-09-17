@@ -1,0 +1,8 @@
+# Rendered by systemd-migration: restarts service data_postgres after 5 failed healthchecks
+
+[Unit]
+Description=restart data_postgres after a failed healthcheck
+
+[Service]
+Type=oneshot
+ExecStart=systemctl restart data_postgres.service

@@ -1,0 +1,8 @@
+# Rendered by systemd-migration: resource group of stack data on swarm-wrk-1
+
+[Unit]
+Description=stack data slice
+
+[Slice]
+MemoryAccounting=yes
+TasksAccounting=yes

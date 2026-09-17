@@ -1,0 +1,51 @@
+# Rendered by systemd-migration from swarm service web_proxy (stack web, mode global)
+# The image is the service's root; see the [X-Migration] section for its origin.
+
+[Unit]
+Description=web_proxy (migrated from Docker Swarm stack web)
+PartOf=web.target
+After=network-online.target
+Wants=network-online.target
+ConditionHost=swarm-mgr-1
+
+[Service]
+Type=exec
+RootMStack=/var/lib/machines/library-caddy_2.mstack
+MountAPIVFS=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectProc=invisible
+ProtectKernelTunables=yes
+PrivateUsers=self
+ExecSearchPath=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+WorkingDirectory=/srv
+DynamicUser=yes
+Environment=CADDY_VERSION=v2.8.4
+Environment=XDG_CONFIG_HOME=/config
+Environment=XDG_DATA_HOME=/data
+Environment=CADDY_ADMIN=off
+CapabilityBoundingSet=CAP_AUDIT_WRITE CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER CAP_FSETID CAP_KILL CAP_MKNOD CAP_NET_BIND_SERVICE CAP_NET_RAW CAP_SETFCAP CAP_SETGID CAP_SETPCAP CAP_SETUID CAP_SYS_CHROOT
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+NoNewPrivileges=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+Restart=always
+RestartSec=5
+KillMode=mixed
+Slice=stack-web.slice
+SocketBindAllow=tcp:80
+SocketBindDeny=any
+SyslogIdentifier=web_proxy
+LogExtraFields=SWARM_STACK=web SWARM_SERVICE=web_proxy
+LogNamespace=web
+BindReadOnlyPaths=/etc/web/configs/web_caddyfile:/etc/caddy/Caddyfile
+
+[X-Migration]
+Source=docker-swarm
+Stack=web
+Service=web_proxy
+Image=docker.io/library/caddy:2
+ImageName=library-caddy_2
+Renderer=systemd-migration
+Form=service
