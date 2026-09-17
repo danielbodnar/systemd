@@ -92,3 +92,7 @@ bun run check   # typecheck the harness and the plugin's Bun scripts
 bun test        # policy, lockfile, normalizer, and renderer tests
 just shellcheck # shell scripts in the plugin and the harness
 ```
+
+## Dependency note
+
+`@anthropic-ai/sdk` depends on `standardwebhooks`, which depends on the unmaintained `fast-sha256` package for one HMAC call. The harness never verifies webhooks, but the package would still enter the dependency tree, so `package.json` overrides it with `vendor/fast-sha256`, a small shim that delegates the same `hash` and `hmac` calls to `node:crypto`. Remove the override if a maintained upstream replaces the dependency.
