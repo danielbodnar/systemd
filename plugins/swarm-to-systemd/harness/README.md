@@ -77,7 +77,7 @@ bun run src/cli.ts run migrate      # migration-lead coordinates all three and w
 
 ## The approval policy
 
-`approvals.yaml` is a short ordered list of rules: a tool name, a regular expression over the bash command (or file path), and a decision. Read-only Docker queries, the plugin's own scripts, and common inspection commands are allowed; anything that changes the swarm or the host (`docker service update`, `systemctl start`, `install.sh`, `import-secrets.sh`) is denied with a reason the agent sees; secret value files are denied for bash and the read tool; everything else asks. The policy is the operator's contract with the agents, so keep it readable and test changes with `bun test`.
+`approvals.yaml` is a short ordered list of rules: a tool name, a regular expression over the bash command (or file path), and a decision. Read-only Docker queries, the plugin's own scripts, and common inspection commands are allowed; anything that changes the swarm or the host (`docker service update`, `systemctl start`, `install.sh`, `import-secrets.sh`) is denied with a reason the agent sees; secret value files are denied for bash, read, write, and edit; writes and edits are allowed only inside the migration artifacts (`rendered/`, `reports/`, the capture, the inventory, the host map, and the plan) and denied under host paths such as `/etc`; everything else asks. The agents' toolsets pause on every tool except read, glob, and grep, so this policy, not a server-side default, is what approves a write on the production host. The policy is the operator's contract with the agents, so keep it readable and test changes with `bun test`.
 
 The policy only applies to calls that pause. The auditor's tools run under the server's `auto` policy, which allows safe calls and denies high-risk ones on its own and pauses only when unsure; the writer agents put `bash` on `always_ask` so every command crosses the policy.
 
@@ -87,7 +87,7 @@ The policy only applies to calls that pause. The auditor's tools run under the s
 
 ## Scheduled drift audit
 
-`deployments/weekly-drift-audit.md` runs the auditor every Monday against the production environment with a per-run budget, appending to the journal. Pause it with `ant beta:deployments pause --deployment-id <id>` (the id is in the lockfile) during the cutover window so an audit does not compete with the migration session for the single worker.
+`deployments/weekly-drift-audit.md` runs the auditor every Monday against the production environment with a hard per-run budget of USD 15.00 (`max_list_cost` is in cents), writing a dated report and one journal line. `swarm-agent apply` creates it enabled, so apply with `--dry-run` first and pause it if the schedule is not wanted yet. Pause it with `ant beta:deployments pause --deployment-id <id>` (the id is in the lockfile) during the cutover window so an audit does not compete with the migration session for the single worker.
 
 ## Security notes
 

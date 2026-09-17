@@ -17,6 +17,32 @@ rules:
     match: 'secrets/values|/etc/swarm-migration/secrets|/etc/credstore|/run/credentials'
     decision: deny
     reason: secret values are off limits
+  - tool: write
+    match: 'secrets/values|/etc/swarm-migration/secrets|/etc/credstore|/run/credentials'
+    decision: deny
+    reason: secret values are off limits
+  - tool: edit
+    match: 'secrets/values|/etc/swarm-migration/secrets|/etc/credstore|/run/credentials'
+    decision: deny
+    reason: secret values are off limits
+  # Writes land only in the migration artifacts. The worker already refuses
+  # read_only_roots and denied_paths; this is the operator-visible gate on top.
+  - tool: write
+    match: '^/(etc|usr|var/lib/containers|run|boot)/'
+    decision: deny
+    reason: host paths are installed by the runbook, never by an agent
+  - tool: edit
+    match: '^/(etc|usr|var/lib/containers|run|boot)/'
+    decision: deny
+    reason: host paths are installed by the runbook, never by an agent
+  - tool: write
+    match: '(^|/)(rendered|reports|capture[^/]*)/|(^|/)(MIGRATION-PLAN\.md|inventory\.json|host-map\.json)$'
+    decision: allow
+    reason: migration artifact inside the workspace
+  - tool: edit
+    match: '(^|/)(rendered|reports)/|(^|/)(MIGRATION-PLAN\.md|inventory\.json|host-map\.json)$'
+    decision: allow
+    reason: migration artifact inside the workspace
   # Anything that changes the swarm or the host is denied outright; the
   # runbook, not the agent, performs those steps. Container creation and exec
   # are included because, given any socket, they are a root-equivalent path

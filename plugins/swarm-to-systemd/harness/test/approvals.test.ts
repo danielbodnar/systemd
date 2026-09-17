@@ -70,3 +70,20 @@ describe("container creation and exec", () => {
     expect(evaluate(policy, "bash", { command: "podman inspect pg" }).decision).toBe("allow");
   });
 });
+
+describe("write and edit gating", () => {
+  test("migration artifacts inside the workspace are allowed", () => {
+    expect(evaluate(policy, "write", { path: "rendered/hosts/a/etc/containers/systemd/web_app.container" }).decision).toBe("allow");
+    expect(evaluate(policy, "write", { path: "/var/lib/swarm-agent/workspace/reports/audit-2026-09-17.md" }).decision).toBe("allow");
+    expect(evaluate(policy, "edit", { path: "MIGRATION-PLAN.md" }).decision).toBe("allow");
+  });
+  test("secret values and host paths are denied", () => {
+    expect(evaluate(policy, "write", { path: "rendered/hosts/a/secrets/values/pg" }).decision).toBe("deny");
+    expect(evaluate(policy, "edit", { path: "/etc/containers/systemd/web_app.container" }).decision).toBe("deny");
+    expect(evaluate(policy, "write", { path: "/etc/swarm-migration/secrets/pg" }).decision).toBe("deny");
+  });
+  test("anything else asks", () => {
+    expect(evaluate(policy, "write", { path: "/home/operator/.bashrc" }).decision).toBe("ask");
+    expect(evaluate(policy, "edit", { path: "notes.txt" }).decision).toBe("ask");
+  });
+});

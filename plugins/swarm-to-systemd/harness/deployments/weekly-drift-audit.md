@@ -9,6 +9,8 @@ schedule:
   type: cron
   expression: "0 6 * * 1"
   timezone: UTC
+# max_list_cost is in minor units: 1500 is USD 15.00 per run, enough for a
+# read-only audit of a mid-sized swarm and a hard stop if it loops.
 budget:
   type: limit
   max_list_cost:

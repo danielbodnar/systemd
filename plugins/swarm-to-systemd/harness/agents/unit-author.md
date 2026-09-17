@@ -6,12 +6,30 @@ model:
   effort: high
 tools:
   - type: agent_toolset_20260401
+    # Nothing is approved by default. Read-only tools are allowed because the
+    # worker confines them to the workspace and allowed_roots; every tool that
+    # can change something pauses, and the operator's approval policy decides.
     default_config:
       enabled: true
       permission_policy:
-        type: always_allow
+        type: always_ask
     configs:
+      - name: read
+        permission_policy:
+          type: always_allow
+      - name: glob
+        permission_policy:
+          type: always_allow
+      - name: grep
+        permission_policy:
+          type: always_allow
       - name: bash
+        permission_policy:
+          type: always_ask
+      - name: write
+        permission_policy:
+          type: always_ask
+      - name: edit
         permission_policy:
           type: always_ask
       - name: web_search
