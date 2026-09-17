@@ -5,7 +5,7 @@
 // engine needs Podman and is covered by the integration test.
 
 import { describe, expect, test } from "bun:test";
-import { cpSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const script = resolve(import.meta.dir, "../../skills/systemd-verify/scripts/verify.sh");
@@ -59,6 +59,24 @@ describe("verify.sh, native engine", () => {
     const { code, report } = run(["--expected", join(native, "expected.json"), "--host", "swarm-mgr-1", "--units", join(dir, "swarm-mgr-1/etc/systemd/system"), "--dry-run"]);
     expect(code).toBe(1);
     expect(report.checks.find((c) => c.check === "unit-file" && c.status === "fail")?.detail).toMatch(/^web\.target missing/);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("a command path that climbs out of the temporary root is never stubbed", () => {
+    // A hostile capture could put ../ segments into ExecStart=; the stub for
+    // it must not land outside the verifier's temporary root. The unit points
+    // through the root's parents at a marker inside this test's directory.
+    const dir = mkdtempSync(resolve(import.meta.dir, "../.tmp/verify-"));
+    const units = join(dir, "units");
+    cpSync(join(native, "hosts/swarm-mgr-1/etc/systemd/system"), units, { recursive: true });
+    const marker = join(dir, "escaped-stub");
+    const climb = "/../".repeat(12) + marker.replace(/^\//, "");
+    writeFileSync(join(units, "web_proxy.service"), `[Unit]\nDescription=x\n[Service]\nExecStart=${climb}\nExecStartPre=/usr/bin/../../..${marker}\nExecStartPost=/usr/bin//sh\n`);
+    const expected = join(dir, "expected.json");
+    writeFileSync(expected, JSON.stringify({ h: { hostname: "h", units: ["web_proxy.service"], root_kind: "RootImage" } }));
+    const { report } = run(["--expected", expected, "--host", "h", "--units", units, "--dry-run"]);
+    expect(report.checks.find((c) => c.check === "unit-file")?.status).toBe("ok");
+    expect(existsSync(marker)).toBe(false);
     rmSync(dir, { recursive: true, force: true });
   });
 

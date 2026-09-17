@@ -124,8 +124,9 @@ check_restart_loops() {
 # name goes to /usr/bin. The units run inside an image that need not be
 # present on the host at verification time.
 stub_commands() {
-    local root="$1" line cmd unit
+    local root="$1" root_real line cmd dir unit
     shift
+    root_real="$(realpath -m "$root")"
     for unit in "$@"; do
         while IFS= read -r line; do
             cmd="${line#*=}"
@@ -136,9 +137,21 @@ stub_commands() {
                 /*) ;;
                 *) cmd="/usr/bin/$cmd" ;;
             esac
-            mkdir -p "$root$(dirname "$cmd")"
-            printf '#!/bin/sh\nexit 0\n' > "$root$cmd"
-            chmod +x "$root$cmd"
+            # The command comes from the captured estate, so only a plain
+            # absolute path is stubbed: a . or .. segment could point the
+            # write outside the temporary root, and the resolved directory is
+            # checked against it before anything is written.
+            case "/$cmd/" in
+                */../*|*/./*|*//*) continue ;;
+            esac
+            dir="$(realpath -m "$root_real$(dirname "$cmd")")"
+            case "$dir/" in
+                "$root_real"/*) ;;
+                *) continue ;;
+            esac
+            mkdir -p "$dir"
+            printf '#!/bin/sh\nexit 0\n' > "$dir/$(basename "$cmd")"
+            chmod +x "$dir/$(basename "$cmd")"
         done < <(grep -E '^Exec(Start|StartPre|StartPost|Stop|StopPost|Reload|Condition)=' "$unit" 2>/dev/null || true)
     done
 }

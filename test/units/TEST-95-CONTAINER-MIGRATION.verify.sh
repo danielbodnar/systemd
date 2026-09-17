@@ -29,8 +29,9 @@ trap at_exit EXIT
 # stub_commands ROOT UNIT...: create an executable under ROOT for the first
 # word of every Exec*= line; a bare name goes to /usr/bin.
 stub_commands() {
-    local root="$1" line cmd
+    local root="$1" root_real line cmd dir
     shift
+    root_real="$(realpath -m "$root")"
     for unit in "$@"; do
         while IFS= read -r line; do
             cmd="${line#*=}"
@@ -40,9 +41,16 @@ stub_commands() {
             if [[ "$cmd" != /* ]]; then
                 cmd="/usr/bin/$cmd"
             fi
-            mkdir -p "$root$(dirname "$cmd")"
-            printf '#!/bin/sh\nexit 0\n' >"$root$cmd"
-            chmod +x "$root$cmd"
+            # Only a plain absolute path is stubbed; a . or .. segment could
+            # point the write outside the temporary root.
+            case "/$cmd/" in
+                */../*|*/./*|*//*) continue ;;
+            esac
+            dir="$(realpath -m "$root_real$(dirname "$cmd")")"
+            [[ "$dir/" == "$root_real"/* ]] || continue
+            mkdir -p "$dir"
+            printf '#!/bin/sh\nexit 0\n' >"$dir/$(basename "$cmd")"
+            chmod +x "$dir/$(basename "$cmd")"
         done < <(grep -E '^Exec(Start|StartPre|StartPost|Stop|StopPost|Reload|Condition)=' "$unit" || true)
     done
 }
