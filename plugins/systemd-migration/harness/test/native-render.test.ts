@@ -7,7 +7,7 @@
 import { describe, expect, test } from "bun:test";
 import { resolve } from "node:path";
 import { checkUnitText, fileTypeOf } from "../../contract/catalog.ts";
-import type { Inventory } from "../../contract/types.ts";
+import type { Inventory, Service } from "../../contract/types.ts";
 import { escapeUnitPath, imageName, splitImageRef } from "../../contract/unit.ts";
 import { normalize } from "../../skills/discover-docker-swarm/scripts/normalize.ts";
 import { capabilitySet, commandLine, render } from "../../skills/systemd-service/scripts/render.ts";
@@ -182,6 +182,153 @@ describe("native service renderer on the fixture estate", () => {
       "hosts/swarm-mgr-1/etc/systemd/system/web_app.service",
       "hosts/swarm-wrk-1/etc/systemd/system/web_app.service",
     ]);
+  });
+});
+
+describe("service semantics from the source's fields", () => {
+  /** The fixture estate with one service's fields changed, rendered on its own. */
+  function withService(name: string, patch: (s: Service) => void) {
+    const copy = JSON.parse(JSON.stringify(inv)) as Inventory;
+    patch(copy.services.find((s) => s.name === name)!);
+    const r = render(copy);
+    for (const [path, content] of Object.entries(r.files)) {
+      const type = fileTypeOf(path);
+      if (type) expect(checkUnitText(content as string, type).unknown, path).toEqual([]);
+    }
+    return r;
+  }
+  const unitOf = (r: { files: Record<string, unknown> }, host: string, name: string) => r.files[`hosts/${host}/etc/systemd/system/${name}`] as string;
+
+  test("every restart condition maps to its Restart= value", () => {
+    for (const [condition, value] of [["none", "no"], ["on-failure", "on-failure"], ["any", "always"]] as const) {
+      const r = withService("data_exporter", (s) => {
+        s.restart_policy = { condition, delay: null, max_attempts: null, window: null };
+      });
+      expect(unitOf(r, "swarm-wrk-1", "data_exporter.service")).toContain(`Restart=${value}\n`);
+    }
+  });
+
+  test("a source that never gives up turns systemd's own start rate limit off", () => {
+    const unit = unitOf(withService("data_exporter", (s) => {
+      s.restart_policy = { condition: "any", delay: null, max_attempts: null, window: null };
+    }), "swarm-wrk-1", "data_exporter.service");
+    expect(unit).toContain("StartLimitIntervalSec=0");
+    expect(unit).not.toContain("StartLimitBurst=");
+  });
+
+  test("a capped count with no window becomes StartLimitIntervalSec=infinity, which counts over any interval", () => {
+    const unit = unitOf(withService("data_exporter", (s) => {
+      s.restart_policy = { condition: "on-failure", delay: null, max_attempts: 3, window: null };
+    }), "swarm-wrk-1", "data_exporter.service");
+    expect(unit).toContain("StartLimitBurst=3\nStartLimitIntervalSec=infinity");
+  });
+
+  test("Restart= and the start limit are left off a service that is never restarted", () => {
+    const unit = unitOf(withService("data_exporter", (s) => {
+      s.restart_policy = { condition: "none", delay: null, max_attempts: 4, window: "1m" };
+    }), "swarm-wrk-1", "data_exporter.service");
+    expect(unit).toContain("Restart=no");
+    expect(unit).not.toContain("StartLimit");
+  });
+
+  test("a sub-second delay and grace period keep their precision", () => {
+    const unit = unitOf(withService("data_exporter", (s) => {
+      s.restart_policy = { condition: "any", delay: "500ms", max_attempts: null, window: null };
+      s.stop_grace_period = "1500ms";
+    }), "swarm-wrk-1", "data_exporter.service");
+    expect(unit).toContain("RestartSec=500ms");
+    expect(unit).toContain("TimeoutStopSec=1500ms");
+  });
+
+  test("a zero grace period keeps the source's behaviour and says what it means", () => {
+    const r = withService("data_exporter", (s) => { s.stop_grace_period = "0s"; });
+    expect(unitOf(r, "swarm-wrk-1", "data_exporter.service")).toContain("TimeoutStopSec=0");
+    expect(r.notes.some((n) => n.includes("stop_grace_period was 0"))).toBe(true);
+  });
+
+  test("a restart limit that a healthcheck restart also counts against is said so once", () => {
+    const r = withService("data_exporter", (s) => {
+      s.restart_policy = { condition: "on-failure", delay: null, max_attempts: 2, window: "30s" };
+      s.healthcheck = { test: ["CMD", "/bin/true"], interval: "10s", timeout: "5s", retries: 2, start_period: null };
+    });
+    expect(r.notes.some((n) => n.startsWith("data_exporter: StartLimitBurst=2") && n.includes("data_exporter-restart.service"))).toBe(true);
+  });
+
+  test("a stop signal systemd does not accept is noted rather than written into KillSignal=", () => {
+    const r = withService("data_exporter", (s) => {
+      s.stop_signal = "SIGINT\nExecStartPre=/bin/rm -rf /";
+    });
+    const unit = unitOf(r, "swarm-wrk-1", "data_exporter.service");
+    expect(unit).not.toContain("ExecStartPre");
+    expect(unit).not.toContain("KillSignal=");
+    expect(r.notes.some((n) => n.includes("is not a signal KillSignal= accepts"))).toBe(true);
+    expect(unitOf(withService("data_exporter", (s) => { s.stop_signal = "QUIT"; }), "swarm-wrk-1", "data_exporter.service")).toContain("KillSignal=SIGQUIT");
+  });
+
+  test("ulimits become Limit*= with infinity for unlimited, and an undocumented name is a note", () => {
+    const r = withService("data_exporter", (s) => {
+      s.ulimits = [
+        { name: "nproc", soft: 1024, hard: 2048 },
+        { name: "RLIMIT_MEMLOCK", soft: -1, hard: -1 },
+        { name: "sigpending", soft: 62793, hard: 62793 },
+        { name: "nofilehandles", soft: 1, hard: 1 },
+      ];
+    });
+    const unit = unitOf(r, "swarm-wrk-1", "data_exporter.service");
+    expect(unit).toContain("LimitNPROC=1024:2048");
+    expect(unit).toContain("LimitMEMLOCK=infinity");
+    expect(unit).toContain("LimitSIGPENDING=62793");
+    expect(unit).not.toContain("LIMITNOFILEHANDLES");
+    expect(r.notes.some((n) => n.includes("ulimit nofilehandles") && n.includes("no Limit*= directive"))).toBe(true);
+  });
+
+  test("hostname is set in the service's own UTS namespace", () => {
+    const r = withService("data_exporter", (s) => { s.hostname = "exporter.internal"; });
+    expect(unitOf(r, "swarm-wrk-1", "data_exporter.service")).toContain("ProtectHostname=private:exporter.internal");
+    const hostile = withService("data_exporter", (s) => { s.hostname = "x\nExecStopPost=/bin/false"; });
+    expect(unitOf(hostile, "swarm-wrk-1", "data_exporter.service")).not.toContain("ProtectHostname=");
+    expect(hostile.notes.some((n) => n.includes("is not a host name ProtectHostname= accepts"))).toBe(true);
+  });
+
+  test("init says which init the image runs through, or that none was found", () => {
+    const withInit = withService("web_proxy", (s) => {
+      s.init = true;
+      s.command = ["/sbin/tini", "--", "caddy", "run"];
+    });
+    expect(withInit.notes.some((n) => n.startsWith("web_proxy: init was set and the image already runs through /sbin/tini"))).toBe(true);
+    const withoutInit = withService("web_proxy", (s) => { s.init = true; });
+    expect(withoutInit.notes.some((n) => n.startsWith("web_proxy: init was set,") && n.includes("reaps the orphans"))).toBe(true);
+  });
+
+  test("tty, dns, and extra_hosts say what owns them instead of inventing a directive", () => {
+    const r = withService("data_exporter", (s) => {
+      s.tty = true;
+      s.dns = { nameservers: ["10.0.0.53"], search: ["corp.example"], options: ["ndots:2"] };
+      s.extra_hosts = ["10.0.9.9 legacy.internal"];
+    });
+    const unit = unitOf(r, "swarm-wrk-1", "data_exporter.service");
+    expect(unit).not.toContain("TTYPath=");
+    expect(r.notes.some((n) => n.includes("tty gave the container a pseudo-terminal") && n.includes("TTYPath="))).toBe(true);
+    expect(r.notes.some((n) => n.includes("nameservers 10.0.0.53") && n.includes("the resolved component owns the resolver"))).toBe(true);
+    expect(r.notes.some((n) => n.includes("extra_hosts 10.0.9.9 legacy.internal"))).toBe(true);
+  });
+
+  test("a job is a oneshot unit with no restart, no start limit, and no health timer", () => {
+    const r = withService("web_app", (s) => {
+      s.mode = "replicated-job";
+      s.replicas = 1;
+    });
+    const unit = unitOf(r, "swarm-wrk-1", "web_app.service");
+    expect(unit).toContain("Type=oneshot\nRemainAfterExit=no");
+    expect(unit).not.toContain("Restart=");
+    expect(unit).not.toContain("StartLimit");
+    expect(r.files["hosts/swarm-wrk-1/etc/systemd/system/web_app-health.timer"]).toBeUndefined();
+    expect(r.files["hosts/swarm-wrk-1/etc/systemd/system/web_app.timer"]).toBeUndefined();
+    expect(r.hosts["swarm-wrk-1"]!.timers).not.toContain("web_app.timer");
+    expect(unitOf(r, "swarm-wrk-1", "web.target")).toContain("Wants=web_app.service");
+    expect(r.notes.some((n) => n.includes("the healthcheck is not rendered for a replicated-job"))).toBe(true);
+    expect(r.notes.some((n) => n.includes("runs once when web.target starts") && n.includes("service.schedule.web_app"))).toBe(true);
+    expect(r.notes.some((n) => n.includes("restart_policy on-failure is not rendered for a replicated-job"))).toBe(true);
   });
 });
 

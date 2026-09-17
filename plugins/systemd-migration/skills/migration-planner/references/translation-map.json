@@ -297,7 +297,7 @@
     },
     {
       "id": "replicas",
-      "concept": "Replicas and mode: global",
+      "concept": "Replicas and mode: global, replicated job, global job",
       "source": [
         "services[].mode",
         "services[].replicas"
@@ -322,9 +322,34 @@
               "file": "target",
               "section": "Unit",
               "name": "Wants="
+            },
+            {
+              "file": "service",
+              "section": "Service",
+              "name": "Type="
+            },
+            {
+              "file": "service",
+              "section": "Service",
+              "name": "RemainAfterExit="
+            },
+            {
+              "file": "timer",
+              "section": "Timer",
+              "name": "OnCalendar="
+            },
+            {
+              "file": "timer",
+              "section": "Timer",
+              "name": "Persistent="
+            },
+            {
+              "file": "timer",
+              "section": "Timer",
+              "name": "Unit="
             }
           ],
-          "how": "A template NAME@.service with one instance per replica per host, all in stack-<name>.slice; mode global becomes one instance on every eligible host. Swarm scheduling across the cluster becomes a host assignment in the plan."
+          "how": "A template NAME@.service with one instance per replica per host, all in stack-<name>.slice; mode global becomes one instance on every eligible host. Swarm scheduling across the cluster becomes a host assignment in the plan. A replicated job or global job becomes Type=oneshot with RemainAfterExit=no and no Restart=; Swarm records no schedule, so the plan asks for one and an OnCalendar expression renders a <service>.timer with Persistent=yes that the stack target wants in the service place."
         }
       ]
     },
@@ -400,7 +425,7 @@
               "name": "ConditionArchitecture="
             }
           ],
-          "how": "The host map assigns each service to hosts; ConditionHost= guards a unit against being started elsewhere; node labels are recorded in /etc/machine-info as DEPLOYMENT= and LOCATION=."
+          "how": "The host map assigns each service to hosts; ConditionHost= guards a unit against being started elsewhere; node labels are recorded in /etc/machine-info as DEPLOYMENT= and LOCATION=. A spread preference groups the eligible hosts by its descriptor and hands instances to the groups round-robin, and max_replicas_per_node caps the instances one host may carry, with the replicas it leaves unplaced noted on the placement decision."
         }
       ]
     },
@@ -447,7 +472,7 @@
               "name": "StartLimitBurst="
             }
           ],
-          "how": "condition any becomes Restart=always, on-failure becomes Restart=on-failure, none becomes Restart=no; delay becomes RestartSec=; max_attempts within window become StartLimitBurst= and StartLimitIntervalSec=."
+          "how": "condition any becomes Restart=always, on-failure becomes Restart=on-failure, none becomes Restart=no; delay becomes RestartSec=, keeping sub-second precision; max_attempts becomes StartLimitBurst= and window becomes StartLimitIntervalSec=. Swarm never gives up when max_attempts is 0 or absent, so the unit gets StartLimitIntervalSec=0 rather than the manager default, and a budget with no window gets infinity, which counts over any interval. The limit counts every start, including the restart the health unit performs."
         }
       ]
     },
@@ -1499,9 +1524,14 @@
               "file": "service",
               "section": "Service",
               "name": "BindReadOnlyPaths="
+            },
+            {
+              "file": "service",
+              "section": "Service",
+              "name": "ProtectHostname="
             }
           ],
-          "how": "read_only becomes ProtectSystem=strict, pid and ipc isolation become PrivatePIDs= and PrivateIPC=, extra_hosts becomes a bound /etc/hosts, dns becomes per-link DNS= or a bound resolv.conf."
+          "how": "read_only becomes ProtectSystem=strict, pid and ipc isolation become PrivatePIDs= and PrivateIPC=, hostname becomes ProtectHostname=private:<name> in the service own UTS namespace, extra_hosts becomes a bound /etc/hosts, dns becomes per-link DNS= or a bound resolv.conf. init and tty are notes: the service manager reaps orphans the injected init would have reaped, and a service has no pseudo-terminal."
         },
         {
           "target": "nspawn",

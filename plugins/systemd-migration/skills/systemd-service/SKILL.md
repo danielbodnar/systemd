@@ -38,7 +38,8 @@ rendered-native/
     secrets/import-credentials.sh   systemd-creds encrypt from /etc/swarm-migration/secrets (operator-supplied)
     expected.json               this host's units, timers, mounts, ports, credentials, images
     etc/systemd/system/         <service>.service, <stack>.target, stack-<stack>.slice,
-                                <service>-health.service and .timer, <service>-restart.service, <path>.mount
+                                <service>-health.service and .timer, <service>-restart.service,
+                                <service>.timer (a job with a schedule), <path>.mount
     etc/<stack>/configs/<name>  config payloads (ownership and mode applied by install.sh)
     etc/<stack>/<service>.env   long environments, mode 0600
     etc/tmpfiles.d/<stack>.conf local volume directories
@@ -57,9 +58,27 @@ Every unit carries an `[X-Migration]` section with the stack, service, image ref
 
 **Ports are what the process opens.** A native service shares the host's network namespace, so it listens on the port the process binds; `SocketBindAllow=` and `SocketBindDeny=any` restrict it to the published set. A published port that differs from the container port is a note, as are ingress-mode ports, which have no routing mesh behind them.
 
+**The lifecycle is the restart policy.** `Restart=` takes the condition
+(`any` becomes `always`, `none` becomes `no`), `RestartSec=` the delay, and
+`StartLimitBurst=` with `StartLimitIntervalSec=` the attempt budget. Swarm
+counts attempts and gives up only when `max_attempts` says so, while systemd
+rate-limits every unit by default, so a service the source never gave up on
+is rendered with `StartLimitIntervalSec=0` and one with a budget but no
+window with `infinity`. The limit counts every start, including the restart
+the health unit performs, which is how Swarm counted an unhealthy task.
+
+**A job is a oneshot unit.** `replicated-job` and `global-job` become
+`Type=oneshot` with `RemainAfterExit=no`, no `Restart=`, and no health timer:
+the run's result is the unit's exit status. Swarm has no schedule of its own,
+so `service.schedule.<service>` asks for one; empty, the default, runs the job
+once when the stack target starts, and an `OnCalendar` expression renders a
+`<service>.timer` that the stack target wants in the service's place. The
+default comes from a service label whose last segment is `schedule` or `cron`,
+translated from crontab syntax where the expression allows.
+
 **Health is a timer.** `<service>-health.timer` runs the healthcheck command in the same root at the Swarm interval, after the start period; after the configured retries fail, `OnFailure=` restarts the service. An application that speaks `sd_notify(3)` should use `WatchdogSec=` instead, which is a hand edit.
 
-**Resources and security are directives.** Limits and reservations become `CPUQuota=`, `MemoryMax=`, `MemoryLow=`, `TasksMax=`; ulimits become `Limit*=`; `cap_add` and `cap_drop` become `CapabilityBoundingSet=` and `AmbientCapabilities=` starting from Docker's default set; `privileged` is never rendered. `read_only` becomes `ProtectSystem=strict`.
+**Resources and security are directives.** Limits and reservations become `CPUQuota=`, `MemoryMax=`, `MemoryLow=`, `TasksMax=`; ulimits become the `Limit*=` set systemd.exec(5) documents, with `infinity` for Docker's -1 and a note for a name it does not document; `cap_add` and `cap_drop` become `CapabilityBoundingSet=` and `AmbientCapabilities=` starting from Docker's default set; `privileged` is never rendered. `read_only` becomes `ProtectSystem=strict`, and `hostname` becomes `ProtectHostname=private:<name>`, which names the service's own UTS namespace without touching the host's name. `init` and `tty` are notes: the service manager already reaps orphans, and a service has no pseudo-terminal.
 
 **Networks are the next phase.** Overlay networks, aliases, and VIPs are not rendered here: the services share the host namespace and reach each other by host address, which the notes say per service. `systemd-networkd` renders zone bridges and cross-host transport; an nspawn machine (`systemd-machined`) is the target when a private network namespace is required.
 

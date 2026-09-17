@@ -87,6 +87,78 @@ function restartFor(svc: Service): string {
   }
 }
 
+/** An inventory duration as a systemd.time(7) value, keeping sub-second precision a rounded second would lose. */
+export function timeValue(d: string | null | undefined): string | null {
+  const seconds = durationToSeconds(d);
+  if (seconds === null) return null;
+  if (Number.isInteger(seconds)) return String(seconds);
+  return `${Math.round(seconds * 1000)}ms`;
+}
+
+/**
+ * The [Unit] start rate limit a restart policy needs.
+ *
+ * Swarm counts restart attempts: `max_attempts` within `window`, where 0 or
+ * absent attempts mean it never gives up and an absent window means the
+ * count runs for the life of the service. systemd counts starts and rate
+ * limits every unit by default (`DefaultStartLimitBurst=` within
+ * `DefaultStartLimitIntervalSec=`), so a source that never gives up has to
+ * say so: `StartLimitIntervalSec=0` disables the limit, and an unbounded
+ * window becomes `infinity`, which systemd.unit(5) documents as the total
+ * count over any interval. Jobs and `condition: none` are never restarted,
+ * so neither gets a limit.
+ */
+export function startLimit(svc: Service): { burst: string | null; interval: string | null } {
+  if (svc.mode.endsWith("job") || svc.restart_policy.condition === "none") return { burst: null, interval: null };
+  const attempts = svc.restart_policy.max_attempts;
+  if (attempts === null || attempts <= 0) return { burst: null, interval: "0" };
+  const window = timeValue(svc.restart_policy.window);
+  return { burst: String(attempts), interval: window && window !== "0" ? window : "infinity" };
+}
+
+/** The resource limits systemd.exec(5) documents, by the name a ulimit carries without its RLIMIT_ prefix. */
+export const RLIMIT_NAMES = ["AS", "CORE", "CPU", "DATA", "FSIZE", "LOCKS", "MEMLOCK", "MSGQUEUE", "NICE", "NOFILE", "NPROC", "RSS", "RTPRIO", "RTTIME", "SIGPENDING", "STACK"];
+
+/** The `Limit*=` directive for a ulimit name, or null when systemd.exec(5) documents none. */
+export function limitDirective(name: string): string | null {
+  const n = name.toUpperCase().replace(/^RLIMIT_/, "");
+  return RLIMIT_NAMES.includes(n) ? `Limit${n}` : null;
+}
+
+/** A ulimit value as systemd writes it; Docker's -1 is unlimited, which systemd spells `infinity`. */
+export function limitValue(soft: number, hard: number): string {
+  const one = (v: number) => (v < 0 ? "infinity" : String(Math.trunc(v)));
+  return soft === hard ? one(hard) : `${one(soft)}:${one(hard)}`;
+}
+
+/** The stop signal as KillSignal= accepts it, or null with a note when the capture holds something else. */
+export function killSignal(svc: Service, notes: string[]): string | null {
+  if (!svc.stop_signal) return null;
+  const raw = svc.stop_signal.trim().toUpperCase();
+  const name = raw.startsWith("SIG") ? raw : `SIG${raw}`;
+  if (!/^SIG(RTMIN(\+\d{1,2})?|RTMAX(-\d{1,2})?|[A-Z]{2,8}|\d{1,2})$/.test(name)) {
+    notes.push(`${svc.name}: stop_signal ${JSON.stringify(svc.stop_signal)} is not a signal KillSignal= accepts; the unit keeps systemd's default SIGTERM`);
+    return null;
+  }
+  return name;
+}
+
+/** Init processes an image can already carry as PID 1; Docker's `init` injects one from outside the image instead. */
+export const DOCUMENTED_INITS = ["catatonit", "docker-init", "dumb-init", "runit", "s6-svscan", "supervisord", "tini"];
+
+/** The init the argv already runs through, or null when it starts the workload directly. */
+export function initBinary(argv: string[]): string | null {
+  const first = argv[0];
+  if (!first) return null;
+  const base = first.slice(first.lastIndexOf("/") + 1);
+  return DOCUMENTED_INITS.includes(base) ? first : null;
+}
+
+/** A host name that can be written into ProtectHostname=private: without carrying anything else into the unit. */
+export function isHostnameValue(value: string): boolean {
+  return value.length <= 253 && /^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$/.test(value);
+}
+
 /** Shell syntax beyond a pipeline or a list: substitutions, redirections, background jobs, subshells, variables. */
 export function healthcheckNeedsApproval(command: string): boolean {
   return /[`$<>();{}]|\\|&(?!&)/.test(command);
@@ -94,6 +166,82 @@ export function healthcheckNeedsApproval(command: string): boolean {
 
 export function healthDecisionId(service: string): string {
   return `service.healthcheck.${service}`;
+}
+
+export function scheduleId(service: string): string {
+  return `service.schedule.${service}`;
+}
+
+/**
+ * Whether a value may be written into `OnCalendar=`. The expression reaches a
+ * unit file from a plan a person edits, so only the characters
+ * systemd.time(7) uses in a calendar event get through; everything else is
+ * refused rather than interpolated.
+ */
+export function isCalendarExpression(value: string): boolean {
+  return value.length > 0 && value.length <= 120 && /^[A-Za-z0-9 ,:*/.+-]+$/.test(value);
+}
+
+const CRON_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function cronField(field: string, day: boolean, pad = false): string | null {
+  const out: string[] = [];
+  for (const part of field.split(",")) {
+    const m = /^(\*|\d{1,4}|\d{1,4}-\d{1,4})(?:\/(\d{1,4}))?$/.exec(part.trim());
+    if (!m) return null;
+    const base = m[1]!;
+    const step = m[2];
+    const name = (n: string) => (day ? (CRON_DAYS[Number(n) % 7] ?? null) : pad ? n.padStart(2, "0") : n);
+    if (base === "*") out.push(step ? `${pad ? "00" : "0"}/${step}` : "*");
+    else if (base.includes("-")) {
+      const [from, to] = base.split("-") as [string, string];
+      const a = name(from);
+      const b = name(to);
+      if (a === null || b === null) return null;
+      out.push(`${a}..${b}${step ? `/${step}` : ""}`);
+    } else {
+      const a = name(base);
+      if (a === null) return null;
+      out.push(`${a}${step ? `/${step}` : ""}`);
+    }
+  }
+  return out.join(",");
+}
+
+/**
+ * A five-field crontab expression as an `OnCalendar=` event, or null when it
+ * is not one. The Swarm cron sidecars carry crontab syntax in a service
+ * label; systemd.time(7) calendar events are a different grammar, so the
+ * common shapes (`*`, a number, a list, a range, and a step on any of them)
+ * are translated and anything else is left for the operator.
+ */
+export function cronToCalendar(expression: string): string | null {
+  const fields = expression.trim().split(/\s+/);
+  if (fields.length !== 5) return null;
+  const minute = cronField(fields[0]!, false, true);
+  const hour = cronField(fields[1]!, false, true);
+  const dom = cronField(fields[2]!, false);
+  const month = cronField(fields[3]!, false);
+  const dow = cronField(fields[4]!, true);
+  if (minute === null || hour === null || dom === null || month === null || dow === null) return null;
+  const days = dow === "*" ? "" : `${dow} `;
+  const event = `${days}*-${month}-${dom} ${hour}:${minute}:00`;
+  return isCalendarExpression(event) ? event : null;
+}
+
+/**
+ * The schedule the capture recorded for a job. Swarm has no schedule of its
+ * own, so the convention its cron sidecars use is a service label whose last
+ * segment is `schedule` or `cron`; a crontab expression there is translated,
+ * a calendar event is taken as it stands.
+ */
+export function capturedSchedule(svc: Service): { label: string; raw: string; calendar: string } | null {
+  for (const [label, raw] of Object.entries({ ...svc.container_labels, ...svc.labels }).sort()) {
+    if (!/(^|[._-])(schedule|cron)$/i.test(label) || typeof raw !== "string") continue;
+    const calendar = cronToCalendar(raw) ?? (isCalendarExpression(raw) ? raw.trim() : null);
+    if (calendar) return { label, raw, calendar };
+  }
+  return null;
 }
 
 export const serviceComponent: Component = {
@@ -105,8 +253,24 @@ export const serviceComponent: Component = {
   decide(ctx: PlanContext): DecisionSpec[] {
     const out: DecisionSpec[] = [];
     for (const svc of ctx.inventory.services) {
+      if (!svc.mode.endsWith("job")) continue;
+      const captured = capturedSchedule(svc);
+      out.push({
+        id: scheduleId(svc.name),
+        kind: "value",
+        format: "text",
+        subject: { kind: "service", name: svc.name },
+        question: `${svc.name} ran as a ${svc.mode}, which Swarm starts on demand. On what schedule should it run? An OnCalendar expression (systemd.time(7)) renders a timer; leave it empty to run the job once when its stack target starts.`,
+        default: captured?.calendar ?? "",
+        evidence: [
+          `services[${svc.name}].mode=${svc.mode}`,
+          ...(captured ? [`services[${svc.name}].labels[${captured.label}]=${captured.raw}`] : [`services[${svc.name}].labels carry no schedule; Swarm records none of its own`]),
+        ],
+      });
+    }
+    for (const svc of ctx.inventory.services) {
       const test = svc.healthcheck?.test ?? [];
-      if (test[0] !== "CMD-SHELL") continue;
+      if (test[0] !== "CMD-SHELL" || svc.mode.endsWith("job")) continue;
       const command = test.slice(1).join(" ");
       const risky = healthcheckNeedsApproval(command);
       out.push({
@@ -149,12 +313,16 @@ export const serviceComponent: Component = {
       u.add("Unit", "After", "network-online.target");
       u.add("Unit", "Wants", "network-online.target");
       u.add("Unit", "ConditionHost", ctx.host);
-      if (svc.restart_policy.max_attempts) u.add("Unit", "StartLimitBurst", svc.restart_policy.max_attempts);
-      const window = durationToSeconds(svc.restart_policy.window);
-      if (window) u.add("Unit", "StartLimitIntervalSec", Math.round(window));
+      const limit = startLimit(svc);
+      u.add("Unit", "StartLimitBurst", limit.burst);
+      u.add("Unit", "StartLimitIntervalSec", limit.interval);
       if (rootInfo.kind === "RootImage") u.add("Unit", "RequiresMountsFor", rootInfo.root.slice(0, rootInfo.root.lastIndexOf("/")));
 
-      u.add("Service", "Type", inst.service.mode.endsWith("job") ? "oneshot" : "exec");
+      const isJob = svc.mode.endsWith("job");
+      u.add("Service", "Type", isJob ? "oneshot" : "exec");
+      // A Swarm job's task is done when its process exits; nothing about the
+      // service stays active afterwards, so the unit does not linger either.
+      if (isJob) u.add("Service", "RemainAfterExit", "no");
       u.add("Service", rootInfo.kind, rootInfo.root);
       u.add("Service", "MountAPIVFS", "yes");
       u.add("Service", "PrivateTmp", svc.mounts.some((m) => m.type === "tmpfs" && m.target === "/tmp") ? null : "yes");
@@ -167,6 +335,11 @@ export const serviceComponent: Component = {
 
       const argv = commandLine(svc, image, noteList);
       const { exec, searchPath } = execLine(argv, image);
+      if (svc.init) {
+        const init = initBinary(argv);
+        if (init) ctx.note(`${svc.name}: init was set and the image already runs through ${init}, so ExecStart= keeps it as the service's first process`);
+        else ctx.note(`${svc.name}: init was set, which made Docker run its own init as PID 1 from outside the image; the image records none of the init processes this renderer documents (${DOCUMENTED_INITS.join(", ")}), so ExecStart= runs the workload directly and the service manager reaps the orphans the init would have reaped`);
+      }
       u.add("Service", "ExecSearchPath", searchPath);
       u.add("Service", "ExecStart", exec);
       u.add("Service", "WorkingDirectory", svc.workdir ?? image?.workdir ?? null);
@@ -178,7 +351,7 @@ export const serviceComponent: Component = {
         u.add("Service", "User", ug.user);
         u.add("Service", "Group", ug.group);
       }
-      const shape: ServiceShape = { base, unit: unitName, root: rootInfo.root, rootKind: rootInfo.kind, user: ug.user, group: ug.group, dynamic: ug.dynamic, searchPath, isJob: svc.mode.endsWith("job"), stack };
+      const shape: ServiceShape = { base, unit: unitName, root: rootInfo.root, rootKind: rootInfo.kind, user: ug.user, group: ug.group, dynamic: ug.dynamic, searchPath, isJob, stack };
       ctx.set(instanceKey(base), shape);
 
       // Environment: the image's variables first (PATH is handled by ExecSearchPath=), then the service's plain ones; creds renders the redacted ones.
@@ -228,8 +401,12 @@ export const serviceComponent: Component = {
       u.add("Service", "LockPersonality", "yes");
       if (svc.privileged) ctx.note(`${svc.name}: privileged is not rendered; the unit has Docker's default capability set, add what the workload needs to CapabilityBoundingSet= and AmbientCapabilities=`, "decision");
       for (const ul of svc.ulimits) {
-        const key = `Limit${ul.name.toUpperCase().replace(/^RLIMIT_/, "")}`;
-        u.add("Service", key, ul.soft === ul.hard ? String(ul.hard) : `${ul.soft}:${ul.hard}`);
+        const key = limitDirective(ul.name);
+        if (!key) {
+          ctx.note(`${svc.name}: ulimit ${ul.name} (${ul.soft}:${ul.hard}) has no Limit*= directive in systemd.exec(5); it is not rendered`);
+          continue;
+        }
+        u.add("Service", key, limitValue(ul.soft, ul.hard));
       }
       if (Object.keys(svc.sysctls).length) {
         const lines = sysctls.get(stack) ?? [];
@@ -242,24 +419,45 @@ export const serviceComponent: Component = {
       }
 
       // Lifecycle.
-      u.add("Service", "Restart", shape.isJob ? null : restartFor(svc));
-      const delay = durationToSeconds(svc.restart_policy.delay);
-      if (delay) u.add("Service", "RestartSec", Math.round(delay));
-      const grace = durationToSeconds(svc.stop_grace_period);
-      if (grace) u.add("Service", "TimeoutStopSec", Math.round(grace));
-      u.add("Service", "KillSignal", svc.stop_signal);
+      u.add("Service", "Restart", isJob ? null : restartFor(svc));
+      u.add("Service", "RestartSec", isJob ? null : timeValue(svc.restart_policy.delay));
+      const grace = timeValue(svc.stop_grace_period);
+      u.add("Service", "TimeoutStopSec", grace);
+      if (grace === "0") ctx.note(`${svc.name}: stop_grace_period was 0, so TimeoutStopSec=0 lets the manager reach SIGKILL at once, as the source did; raise it if the workload needs time to shut down`);
+      u.add("Service", "KillSignal", killSignal(svc, noteList));
       u.add("Service", "KillMode", "mixed");
+      if (isJob && svc.restart_policy.condition !== "none") {
+        ctx.note(`${svc.name}: restart_policy ${svc.restart_policy.condition} is not rendered for a ${svc.mode}; a oneshot unit that fails stays failed and is run again by its timer or by hand, as a Swarm job's task is`);
+      }
+      if (limit.burst && svc.healthcheck) {
+        ctx.note(`${svc.name}: StartLimitBurst=${limit.burst} counts every start within StartLimitIntervalSec=${limit.interval}, including the restarts ${base}-restart.service performs after a failed healthcheck, which is how Swarm counted an unhealthy task against max_attempts; systemctl reset-failed clears the counter`);
+      }
 
       if (svc.update_config) ctx.note(`${svc.name}: update_config (${svc.update_config.order}, parallelism ${svc.update_config.parallelism}, on failure ${svc.update_config.failure_action}) is a runbook step; restart hosts one at a time and keep the previous image version under a .v/ directory for rollback`);
       if (svc.rollback_config) ctx.note(`${svc.name}: rollback_config is a runbook step; the previous image version stays pullable under its own name`);
       const droppedLabels = Object.keys(svc.labels).filter((k) => !k.startsWith("com.docker."));
       if (droppedLabels.length) ctx.note(`${svc.name}: service labels not rendered: ${droppedLabels.join(", ")}`);
-      if (svc.hostname) ctx.note(`${svc.name}: hostname ${svc.hostname} is not applied; a native service keeps the host's name (a machine can set it)`);
-      if (svc.dns.nameservers.length || svc.dns.search.length) ctx.note(`${svc.name}: per-service DNS settings are not applied to a native service; the resolved component configures the host's resolver`);
-      for (const eh of svc.extra_hosts) ctx.note(`${svc.name}: extra host "${eh}" must be added to the host's /etc/hosts or the resolver`);
+      if (svc.hostname) {
+        if (isHostnameValue(svc.hostname)) {
+          u.add("Service", "ProtectHostname", `private:${svc.hostname}`);
+          ctx.note(`${svc.name}: hostname ${svc.hostname} is set inside the service's own UTS namespace by ProtectHostname=private:; the host keeps its name and nothing outside the service resolves the new one`);
+        } else {
+          ctx.note(`${svc.name}: hostname ${JSON.stringify(svc.hostname)} is not a host name ProtectHostname= accepts; it is not rendered`);
+        }
+      }
+      if (svc.tty) {
+        ctx.note(`${svc.name}: tty gave the container a pseudo-terminal; a service has no terminal of its own, so nothing is rendered. Add StandardInput=tty with TTYPath= naming a device on the host when the workload needs one`);
+      }
+      if (svc.dns.nameservers.length || svc.dns.search.length || svc.dns.options.length) {
+        ctx.note(`${svc.name}: the per-service DNS configuration (nameservers ${svc.dns.nameservers.join(", ") || "none"}, search ${svc.dns.search.join(", ") || "none"}, options ${svc.dns.options.join(", ") || "none"}) is not a service directive; the resolved component owns the resolver on each host and a private resolver needs a machine form`);
+      }
+      if (svc.extra_hosts.length) {
+        ctx.note(`${svc.name}: extra_hosts ${svc.extra_hosts.join(", ")} are not rendered as service directives; add each to the host's /etc/hosts or give the resolved component a record for the name`);
+      }
 
       // Healthcheck: a timer runs the command in the same root; failure restarts the service.
       renderHealthcheck(ctx, inst, shape, svc);
+      const timerUnit = isJob ? renderJobTimer(ctx, inst, svc) : null;
 
       u.add("X-Migration", "Source", "docker-swarm");
       u.add("X-Migration", "Stack", svc.stack ?? "");
@@ -271,7 +469,9 @@ export const serviceComponent: Component = {
       u.add("X-Migration", "Form", inst.form);
 
       ctx.expect("units", unitName);
-      ctx.wantedByStack(stack, unitName);
+      // A scheduled job is started by its timer, so the stack target pulls in
+      // the timer; an unscheduled job runs once when the target starts.
+      ctx.wantedByStack(stack, timerUnit ?? unitName);
     }
     for (const n of noteList) ctx.note(n, /placeholder/.test(n) ? "decision" : "review");
 
@@ -308,8 +508,39 @@ export const serviceComponent: Component = {
   },
 };
 
+/**
+ * A job's schedule. Swarm starts a job when it is created or forced, so the
+ * default is a run when the stack target starts and the unit needs no timer.
+ * When the schedule decision carries a calendar event, the job gets a timer
+ * and the stack target wants the timer rather than the service. Returns the
+ * timer unit name when one was rendered.
+ */
+function renderJobTimer(ctx: RenderContext, inst: { base: string; unit: string; stack: string }, svc: Service): string | null {
+  const schedule = ctx.valueOr(scheduleId(svc.name), "").trim();
+  if (!schedule) {
+    ctx.note(`${svc.name}: the ${svc.mode} runs once when ${inst.stack}.target starts; set ${scheduleId(svc.name)} to an OnCalendar expression to run it on a schedule instead`);
+    return null;
+  }
+  if (!isCalendarExpression(schedule)) throw new Error(`${scheduleId(svc.name)}: ${JSON.stringify(schedule)} is not a calendar expression`);
+  const name = `${inst.base}.timer`;
+  const t = ctx.unit(name, [`Rendered by ${ctx.rendererName}: schedule of ${svc.mode} ${svc.name}, which Swarm ran on demand`]);
+  t.add("Unit", "Description", `schedule for ${inst.base}`);
+  t.add("Unit", "PartOf", `${inst.stack}.target`);
+  t.add("Timer", "OnCalendar", schedule);
+  t.add("Timer", "Persistent", "yes");
+  t.add("Timer", "AccuracySec", "1s");
+  t.add("Timer", "Unit", inst.unit);
+  ctx.expect("timers", name);
+  ctx.note(`${svc.name}: the job runs on ${schedule} from ${name}; Persistent=yes runs a schedule the host missed once it is up again`);
+  return name;
+}
+
 function renderHealthcheck(ctx: RenderContext, inst: { base: string; unit: string; stack: string }, shape: ServiceShape, svc: Service): void {
   if (!svc.healthcheck) return;
+  if (shape.isJob) {
+    ctx.note(`${svc.name}: the healthcheck is not rendered for a ${svc.mode}; a oneshot unit's result is its exit status, which the journal and systemctl report, and there is nothing to restart between runs`);
+    return;
+  }
   const test = svc.healthcheck.test;
   if (test.length === 0 || test[0] === "NONE") return;
   const { base, unit: unitName, stack } = inst;

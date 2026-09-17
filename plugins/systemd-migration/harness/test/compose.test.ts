@@ -17,7 +17,7 @@ import { normalize } from "../../skills/discover-docker-swarm/scripts/normalize.
 import { namespaceId } from "../../skills/systemd-journald/scripts/component.ts";
 import { publishId, transportId } from "../../skills/systemd-networkd/scripts/component.ts";
 import { DISCOVERY } from "../../skills/systemd-resolved/scripts/component.ts";
-import { healthDecisionId, healthcheckNeedsApproval } from "../../skills/systemd-service/scripts/component.ts";
+import { cronToCalendar, healthDecisionId, healthcheckNeedsApproval, scheduleId, startLimit } from "../../skills/systemd-service/scripts/component.ts";
 import { planFor, render } from "../../skills/systemd-service/scripts/render.ts";
 import { configsId } from "../../skills/systemd-sysext/scripts/component.ts";
 import { rootFormId } from "../../skills/systemd-machined/scripts/component.ts";
@@ -246,6 +246,68 @@ describe("rendering from a plan", () => {
     expect(plan.decisions.find((d) => d.id === placementId("data_postgres"))!.chosen).toBe("swarm-mgr-1");
     const r = composeRender(inv, plan, COMPONENTS, { acceptDefaults: true });
     expect(r.hosts["swarm-mgr-1"]!.units).toContain("data_postgres.service");
+  });
+
+  test("a job raises a schedule decision, and only a job does", () => {
+    const withJob = JSON.parse(JSON.stringify(inv)) as Inventory;
+    const job = withJob.services.find((s) => s.name === "data_exporter")!;
+    job.mode = "replicated-job";
+    job.labels = { ...job.labels, "swarm.cronjob.schedule": "*/15 * * * *" };
+    const { plan } = composePlan(withJob, COMPONENTS);
+    const d = plan.decisions.find((x) => x.id === scheduleId("data_exporter"))!;
+    expect(d.kind).toBe("value");
+    expect(d.default).toBe("*-*-* *:00/15:00");
+    expect(d.evidence).toContain("services[data_exporter].labels[swarm.cronjob.schedule]=*/15 * * * *");
+    expect(plan.decisions.some((x) => x.id === scheduleId("web_app"))).toBe(false);
+    expect(plan.decisions.some((x) => x.id === healthDecisionId("data_exporter"))).toBe(false);
+  });
+
+  test("a job with no captured schedule defaults to running once at its target, and a schedule renders a timer the target wants", () => {
+    const withJob = JSON.parse(JSON.stringify(inv)) as Inventory;
+    withJob.services.find((s) => s.name === "data_exporter")!.mode = "global-job";
+    const plan = planFor(withJob);
+    expect(plan.decisions.find((d) => d.id === scheduleId("data_exporter"))!.default).toBe("");
+    const once = composeRender(withJob, plan, COMPONENTS, { acceptDefaults: true });
+    expect(once.files["hosts/swarm-wrk-1/etc/systemd/system/data_exporter.timer"]).toBeUndefined();
+    expect(once.files["hosts/swarm-wrk-1/etc/systemd/system/data.target"]).toContain("Wants=data_exporter.service");
+
+    resolveDecision(plan, scheduleId("data_exporter"), "Mon..Fri *-*-* 03:00:00");
+    const scheduled = composeRender(withJob, plan, COMPONENTS, { acceptDefaults: true });
+    const timer = scheduled.files["hosts/swarm-wrk-1/etc/systemd/system/data_exporter.timer"] as string;
+    expect(timer).toContain("OnCalendar=Mon..Fri *-*-* 03:00:00");
+    expect(timer).toContain("Persistent=yes");
+    expect(timer).toContain("Unit=data_exporter.service");
+    expect(checkUnitText(timer, "timer").unknown).toEqual([]);
+    expect(scheduled.hosts["swarm-wrk-1"]!.timers).toContain("data_exporter.timer");
+    const target = scheduled.files["hosts/swarm-wrk-1/etc/systemd/system/data.target"] as string;
+    expect(target).toContain("Wants=data_exporter.timer");
+    expect(target).not.toContain("Wants=data_exporter.service");
+  });
+
+  test("a schedule that is not a calendar expression never reaches a unit file", () => {
+    const withJob = JSON.parse(JSON.stringify(inv)) as Inventory;
+    withJob.services.find((s) => s.name === "data_exporter")!.mode = "replicated-job";
+    const plan = planFor(withJob);
+    resolveDecision(plan, scheduleId("data_exporter"), "daily\nExecStart=/bin/false");
+    expect(() => composeRender(withJob, plan, COMPONENTS, { acceptDefaults: true })).toThrow(/is not a calendar expression/);
+  });
+
+  test("crontab expressions become calendar events, and anything else is left alone", () => {
+    expect(cronToCalendar("*/5 * * * *")).toBe("*-*-* *:00/5:00");
+    expect(cronToCalendar("0 3 * * 1-5")).toBe("Mon..Fri *-*-* 03:00:00");
+    expect(cronToCalendar("15,45 2 1 * *")).toBe("*-*-1 02:15,45:00");
+    expect(cronToCalendar("0 0 * * 0")).toBe("Sun *-*-* 00:00:00");
+    expect(cronToCalendar("@daily")).toBeNull();
+    expect(cronToCalendar("0 3 * * MON")).toBeNull();
+  });
+
+  test("startLimit turns a Swarm restart budget into the [Unit] rate limit", () => {
+    const svc = inv.services.find((s) => s.name === "web_app")!;
+    expect(startLimit(svc)).toEqual({ burst: "5", interval: "120" });
+    expect(startLimit({ ...svc, restart_policy: { ...svc.restart_policy, max_attempts: null } })).toEqual({ burst: null, interval: "0" });
+    expect(startLimit({ ...svc, restart_policy: { ...svc.restart_policy, window: null } })).toEqual({ burst: "5", interval: "infinity" });
+    expect(startLimit({ ...svc, restart_policy: { ...svc.restart_policy, condition: "none" } })).toEqual({ burst: null, interval: null });
+    expect(startLimit({ ...svc, mode: "replicated-job" })).toEqual({ burst: null, interval: null });
   });
 
   test("components render in dependency order and a cycle is refused", () => {
