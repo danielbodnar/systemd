@@ -356,7 +356,7 @@ render step is checked separately by `bun test`):
 | `.sysext.sh` | merges a rendered confext built from the fixture configs and checks `/etc/<stack>/` appears with the recorded ownership | the pattern from `TEST-50-DISSECT.sysext.sh` |
 | `.capsule.sh` | starts `capsule@stack.service` with the rendered user units | the pattern from `TEST-74-AUX-UTILS.capsule.sh` |
 | `.vmspawn.sh` | skips with 77 without qemu; otherwise boots the rendered DDI and waits for the machine | `find_qemu_binary`, `wait_for_machine` |
-| `.verify.sh` | runs `systemd-analyze verify` over every rendered unit and the directive catalogue check | `systemd-analyze` |
+| `.verify.sh` | runs `systemd-analyze verify` over every rendered unit and the plugin's verifier in dry-run per host | `systemd-analyze` |
 
 The plugin's own `bun test` suite keeps covering the renderers offline, and
 the harness's verifier skill runs the subset of these subtests that make sense
@@ -394,12 +394,12 @@ and the integration subtests passing under
    `contract/coverage.json`, the coverage test. Done.
 5. **Networking.** Zone bridges with the decided ranges and static leases,
    VXLAN and WireGuard transports, macvlan, published ports as sockets,
-   discovery; the `.networkd.sh` subtest.
+   discovery; the `.networkd.sh` subtest. Done.
 6. **Machines.** The machine form with binds, credentials, capabilities,
    and limits; the VM form; `rendered/machine` as a second fixture tree from
-   a committed plan; the `.nspawn.sh` subtest.
+   a committed plan; the `.nspawn.sh` subtest. Done.
 7. **Adapters.** The Quadlet renderer as a component selectable per service;
-   the Podman discovery scaffold.
+   the Podman discovery adapter. Done.
 8. **Documentation and harness.** Agents, commands, tasks, approvals, the
    docs page, this plan. Done alongside the phases above.
 9. **Remaining subtests.** `.dnssd.sh`, `.portable.sh`, `.sysext.sh`,
@@ -430,12 +430,16 @@ and are recorded here so the plan reads as one document.
 ## 9. Status
 
 The restructure branch (`claude/systemd-migration-restructure`, pull request 5
-into pull request 1's branch) carries phases 1 to 4 complete and phases 5 to 7
-in progress. The harness suite covers the contract, the adapters, the
-composition engine, every component's decisions and rendering, the probe, and
-the surface coverage; `plugins/scripts/render-fixtures.sh --check` guards the
-committed fixture trees; `TEST-95-CONTAINER-MIGRATION` runs `.inventory.sh`,
-`.mstack.sh`, `.verify.sh`, and `.probe.sh` on a booted image.
+into pull request 1's branch) carries phases 1 to 8 complete and phase 9 in
+progress. The harness suite covers the contract, both discovery adapters, the
+composition engine, every component's decisions and rendering (plain services,
+machines, virtual machines, Quadlet containers, zone bridges and transports,
+discovery, credentials, storage, journal settings, confexts, portable
+services), the probe, the verifier, and the surface coverage;
+`plugins/scripts/render-fixtures.sh --check` guards the committed native and
+machine fixture trees; `TEST-95-CONTAINER-MIGRATION` runs `.inventory.sh`,
+`.mstack.sh`, `.nspawn.sh`, `.networkd.sh`, `.verify.sh`, and `.probe.sh` on a
+booted image.
 
 The first pull request (`claude/swarm-to-systemd-agent-gcqvex`) carries the
 first generation: the four source-named plugins, the directive catalogue, the
