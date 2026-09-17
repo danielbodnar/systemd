@@ -1,0 +1,40 @@
+# Approval policy applied by `swarm-agent run` to tool calls that pause for
+# confirmation (permission policy `always_ask`, or `auto` with no server
+# determination). Rules are evaluated top to bottom; the first match wins, so
+# the deny rules come first and the allow rules cannot shadow them. `match` is
+# a regular expression tested against the tool's command (bash), path (read,
+# write, edit), or serialized input (other tools). When nothing matches, the
+# default applies: `ask` prompts the operator on a terminal and denies without
+# one.
+default: ask
+rules:
+  # Secret values are never read by an agent.
+  - tool: bash
+    match: 'secrets/values'
+    decision: deny
+    reason: secret values are off limits
+  - tool: read
+    match: 'secrets/values'
+    decision: deny
+    reason: secret values are off limits
+  # Anything that changes the swarm or the host is denied outright; the
+  # runbook, not the agent, performs those steps.
+  - tool: bash
+    match: '\b(docker\s+(service|stack|node|swarm|network|volume|secret|config)\s+(update|deploy|rm|remove|create|leave|join|scale|prune)|systemctl\s+(start|stop|restart|enable|disable|daemon-reload|reset-failed)|podman\s+(run|rm|stop|kill|secret\s+create|system\s+reset)|install\.sh|import-secrets\.sh|rm\s+-rf|mkfs|dd\s+if=)'
+    decision: deny
+    reason: mutating operation reserved for the operator runbook
+  # Read-only swarm inspection is always fine.
+  - tool: bash
+    match: '^\s*docker\s+(info|version|(node|service|stack|network|volume|secret|config|plugin)\s+(ls|inspect|ps))\b'
+    decision: allow
+    reason: read-only docker query
+  # The capture, normalize, render, and verify scripts from the plugin skills.
+  - tool: bash
+    match: '(capture\.sh|normalize\.ts|render\.ts|verify\.sh)\b'
+    decision: allow
+    reason: plugin script
+  # Common read-only shell tools.
+  - tool: bash
+    match: '^\s*(ls|cat|head|tail|wc|find|grep|rg|stat|tree|jq|hostname|id|uname|df|free|ss|ip\s+(addr|route|link)|systemctl\s+(status|list-units|list-unit-files|show|is-active|is-enabled|cat)|journalctl|podman\s+(ps|inspect|images|network\s+ls|volume\s+ls|secret\s+ls|version|info)|systemd-analyze\s+verify)\b'
+    decision: allow
+    reason: read-only inspection

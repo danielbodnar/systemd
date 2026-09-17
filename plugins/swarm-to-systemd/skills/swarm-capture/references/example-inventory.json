@@ -1,0 +1,143 @@
+{
+  "version": "1",
+  "captured_at": "2026-09-01T12:00:00Z",
+  "captured_on": "swarm-mgr-1",
+  "cluster": { "id": "abc123", "engine_version": "27.3.1", "managers": 1, "workers": 1, "is_leader": true },
+  "nodes": [
+    {
+      "id": "n1", "hostname": "swarm-mgr-1", "role": "manager", "leader": true, "availability": "active",
+      "state": "ready", "addr": "10.0.0.11", "labels": { "tier": "edge" }, "engine_labels": {},
+      "engine_version": "27.3.1", "os": "linux", "arch": "x86_64", "nano_cpus": 4000000000, "memory_bytes": 8589934592
+    },
+    {
+      "id": "n2", "hostname": "swarm-wrk-1", "role": "worker", "leader": false, "availability": "active",
+      "state": "ready", "addr": "10.0.0.12", "labels": { "db": "true" }, "engine_labels": {},
+      "engine_version": "27.3.1", "os": "linux", "arch": "x86_64", "nano_cpus": 8000000000, "memory_bytes": 17179869184
+    }
+  ],
+  "stacks": [
+    { "name": "data", "services": ["data_postgres"] },
+    { "name": "web", "services": ["web_app", "web_proxy"] }
+  ],
+  "services": [
+    {
+      "id": "s1", "name": "web_proxy", "short_name": "proxy", "stack": "web",
+      "image": "docker.io/library/caddy:2", "image_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000001",
+      "command": [], "args": [], "env": { "CADDY_ADMIN": "off" }, "redacted_env": [],
+      "labels": { "com.docker.stack.namespace": "web" }, "container_labels": {},
+      "mode": "global", "replicas": null,
+      "placement": { "constraints": ["node.labels.tier == edge"], "preferences": [], "max_replicas_per_node": null, "platforms": [] },
+      "networks": [{ "name": "web_frontend", "aliases": ["proxy"] }],
+      "ports": [
+        { "target": 80, "published": 80, "protocol": "tcp", "mode": "host" },
+        { "target": 443, "published": 443, "protocol": "tcp", "mode": "host" }
+      ],
+      "mounts": [{ "type": "volume", "source": "web_caddy-data", "target": "/data", "readonly": false }],
+      "secrets": [],
+      "configs": [{ "name": "web_caddyfile", "id": "c1", "target": "/etc/caddy/Caddyfile", "uid": "0", "gid": "0", "mode": 292 }],
+      "healthcheck": null,
+      "resources": { "limits": { "nano_cpus": 1000000000, "memory_bytes": 268435456, "pids": null }, "reservations": { "nano_cpus": null, "memory_bytes": 67108864, "pids": null } },
+      "restart_policy": { "condition": "any", "delay": "5s", "max_attempts": null, "window": null },
+      "update_config": { "parallelism": 1, "delay": "10s", "failure_action": "rollback", "monitor": "30s", "max_failure_ratio": 0, "order": "start-first" },
+      "rollback_config": null,
+      "stop_grace_period": "10s", "stop_signal": null, "user": null, "workdir": null, "hostname": null,
+      "dns": { "nameservers": [], "search": [], "options": [] }, "extra_hosts": [],
+      "cap_add": ["NET_BIND_SERVICE"], "cap_drop": [], "sysctls": {}, "ulimits": [],
+      "read_only": false, "init": false, "tty": false, "privileged": false,
+      "logging": { "driver": "json-file", "options": { "max-size": "10m" } },
+      "endpoint_mode": "vip",
+      "tasks": [{ "id": "t1", "node": "swarm-mgr-1", "desired_state": "running", "current_state": "running", "error": "" }]
+    },
+    {
+      "id": "s2", "name": "web_app", "short_name": "app", "stack": "web",
+      "image": "registry.example.com/acme/app:2026.09", "image_digest": null,
+      "command": [], "args": ["serve", "--port", "8080"],
+      "env": { "DATABASE_URL": "postgres://app@data_postgres:5432/app", "APP_SECRET_KEY": "<redacted>", "LOG_LEVEL": "info" },
+      "redacted_env": ["APP_SECRET_KEY"],
+      "labels": { "com.docker.stack.namespace": "web", "traefik.enable": "false" }, "container_labels": {},
+      "mode": "replicated", "replicas": 2,
+      "placement": { "constraints": ["node.role == worker"], "preferences": [], "max_replicas_per_node": 1, "platforms": [] },
+      "networks": [{ "name": "web_frontend", "aliases": ["app"] }, { "name": "data_backend", "aliases": [] }],
+      "ports": [{ "target": 8080, "published": 8080, "protocol": "tcp", "mode": "ingress" }],
+      "mounts": [{ "type": "tmpfs", "source": null, "target": "/tmp", "readonly": false, "tmpfs_size_bytes": 67108864 }],
+      "secrets": [{ "name": "web_app_signing_key", "id": "sec1", "target": "/run/secrets/signing_key", "uid": "1000", "gid": "1000", "mode": 256 }],
+      "configs": [],
+      "healthcheck": { "test": ["CMD-SHELL", "curl -fsS http://localhost:8080/healthz || exit 1"], "interval": "15s", "timeout": "5s", "retries": 3, "start_period": "20s" },
+      "resources": { "limits": { "nano_cpus": 1500000000, "memory_bytes": 536870912, "pids": 512 }, "reservations": { "nano_cpus": 250000000, "memory_bytes": 134217728, "pids": null } },
+      "restart_policy": { "condition": "on-failure", "delay": "3s", "max_attempts": 5, "window": "2m" },
+      "update_config": null, "rollback_config": null,
+      "stop_grace_period": "30s", "stop_signal": "SIGTERM", "user": "1000:1000", "workdir": "/srv/app", "hostname": null,
+      "dns": { "nameservers": [], "search": [], "options": [] }, "extra_hosts": ["legacy.internal:10.0.9.9"],
+      "cap_add": [], "cap_drop": ["ALL"], "sysctls": { "net.core.somaxconn": "1024" }, "ulimits": [{ "name": "nofile", "soft": 65536, "hard": 65536 }],
+      "read_only": true, "init": true, "tty": false, "privileged": false,
+      "logging": { "driver": null, "options": {} },
+      "endpoint_mode": "vip",
+      "tasks": [
+        { "id": "t2", "node": "swarm-wrk-1", "desired_state": "running", "current_state": "running", "error": "" },
+        { "id": "t3", "node": "swarm-mgr-1", "desired_state": "running", "current_state": "running", "error": "" }
+      ]
+    },
+    {
+      "id": "s3", "name": "data_postgres", "short_name": "postgres", "stack": "data",
+      "image": "docker.io/library/postgres:16", "image_digest": null,
+      "command": [], "args": [],
+      "env": { "POSTGRES_DB": "app", "POSTGRES_USER": "app", "POSTGRES_PASSWORD_FILE": "/run/secrets/pg_password" },
+      "redacted_env": [],
+      "labels": { "com.docker.stack.namespace": "data" }, "container_labels": {},
+      "mode": "replicated", "replicas": 1,
+      "placement": { "constraints": ["node.labels.db == true"], "preferences": [], "max_replicas_per_node": null, "platforms": [] },
+      "networks": [{ "name": "data_backend", "aliases": ["postgres", "db"] }],
+      "ports": [],
+      "mounts": [
+        { "type": "volume", "source": "data_pgdata", "target": "/var/lib/postgresql/data", "readonly": false },
+        { "type": "bind", "source": "/srv/backups", "target": "/backups", "readonly": false }
+      ],
+      "secrets": [{ "name": "data_pg_password", "id": "sec2", "target": "/run/secrets/pg_password", "uid": "999", "gid": "999", "mode": 256 }],
+      "configs": [],
+      "healthcheck": { "test": ["CMD", "pg_isready", "-U", "app"], "interval": "10s", "timeout": "5s", "retries": 5, "start_period": "30s" },
+      "resources": { "limits": { "nano_cpus": null, "memory_bytes": 2147483648, "pids": null }, "reservations": { "nano_cpus": null, "memory_bytes": 1073741824, "pids": null } },
+      "restart_policy": { "condition": "any", "delay": null, "max_attempts": null, "window": null },
+      "update_config": null, "rollback_config": null,
+      "stop_grace_period": "1m", "stop_signal": null, "user": null, "workdir": null, "hostname": "postgres",
+      "dns": { "nameservers": [], "search": [], "options": [] }, "extra_hosts": [],
+      "cap_add": [], "cap_drop": [], "sysctls": {}, "ulimits": [],
+      "read_only": false, "init": false, "tty": false, "privileged": false,
+      "logging": { "driver": null, "options": {} },
+      "endpoint_mode": "dnsrr",
+      "tasks": [{ "id": "t4", "node": "swarm-wrk-1", "desired_state": "running", "current_state": "running", "error": "" }]
+    }
+  ],
+  "networks": [
+    {
+      "id": "net1", "name": "web_frontend", "driver": "overlay", "scope": "swarm", "ingress": false, "internal": false, "attachable": true,
+      "encrypted": false, "ipv6": false, "ipam": { "driver": "default", "config": [{ "subnet": "10.10.1.0/24", "gateway": "10.10.1.1" }] },
+      "options": {}, "labels": { "com.docker.stack.namespace": "web" }, "stack": "web", "used_by": ["web_proxy", "web_app"]
+    },
+    {
+      "id": "net2", "name": "data_backend", "driver": "overlay", "scope": "swarm", "ingress": false, "internal": true, "attachable": false,
+      "encrypted": true, "ipv6": false, "ipam": { "driver": "default", "config": [{ "subnet": "10.10.2.0/24" }] },
+      "options": { "encrypted": "" }, "labels": { "com.docker.stack.namespace": "data" }, "stack": "data", "used_by": ["web_app", "data_postgres"]
+    },
+    {
+      "id": "net0", "name": "ingress", "driver": "overlay", "scope": "swarm", "ingress": true, "internal": false, "attachable": false,
+      "encrypted": false, "ipv6": false, "ipam": { "driver": "default", "config": [{ "subnet": "10.0.0.0/24" }] },
+      "options": {}, "labels": {}, "stack": null, "used_by": []
+    }
+  ],
+  "volumes": [
+    { "name": "web_caddy-data", "driver": "local", "scope": "local", "mountpoint": "/var/lib/docker/volumes/web_caddy-data/_data", "options": {}, "labels": { "com.docker.stack.namespace": "web" }, "stack": "web", "used_by": ["web_proxy"] },
+    { "name": "data_pgdata", "driver": "local", "scope": "local", "mountpoint": "/var/lib/docker/volumes/data_pgdata/_data", "options": {}, "labels": { "com.docker.stack.namespace": "data" }, "stack": "data", "used_by": ["data_postgres"] }
+  ],
+  "secrets": [
+    { "id": "sec1", "name": "web_app_signing_key", "labels": { "com.docker.stack.namespace": "web" }, "created_at": "2026-01-01T00:00:00Z", "stack": "web", "used_by": ["web_app"] },
+    { "id": "sec2", "name": "data_pg_password", "labels": { "com.docker.stack.namespace": "data" }, "created_at": "2026-01-01T00:00:00Z", "stack": "data", "used_by": ["data_postgres"] }
+  ],
+  "configs": [
+    { "id": "c1", "name": "web_caddyfile", "labels": { "com.docker.stack.namespace": "web" }, "created_at": "2026-01-01T00:00:00Z", "data_base64": "OjgwIHsKICByZXNwb25kICJvayIKfQo=", "stack": "web", "used_by": ["web_proxy"] }
+  ],
+  "warnings": [
+    "service web_app: image registry.example.com/acme/app:2026.09 is not pinned to a digest",
+    "service web_app: publishes through the ingress routing mesh; systemd hosts publish per host",
+    "network data_backend: encrypted overlay; cross-host transport must be replaced (see systemd-migration-plan/references/networking.md)"
+  ]
+}

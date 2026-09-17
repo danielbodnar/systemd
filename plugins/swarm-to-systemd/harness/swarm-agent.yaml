@@ -1,0 +1,37 @@
+# swarm-agent harness configuration. Paths are relative to this file.
+# The operator CLI (`swarm-agent run`) and the production worker
+# (`swarm-agent worker`) both read it; keep one copy per environment.
+
+# Written by `ant apply`; maps each agent/environment file to its API id.
+lockfile: ./claude-lock.json
+
+# Console workspace segment for session links. Use the workspace id
+# (wrkspc_...) when the credentials belong to a non-default workspace.
+workspace: default
+
+worker:
+  # Where the agent's bash and file tools operate on the production host.
+  workdir: /var/lib/swarm-agent/workspace
+  # Extra directories the file tools may read; bash is not confined by this.
+  allowed_roots:
+    - /etc/containers/systemd
+    - /etc/systemd/system
+  # Directories the write and edit tools refuse to modify.
+  read_only_roots:
+    - /etc/containers/systemd
+    - /etc/systemd/system
+  # Memory store sync cadence; null disables memory stores on this worker.
+  memory_sync_interval_ms: 15000
+  # Idle timeout for a claimed session before the worker releases it.
+  max_idle_ms: 900000
+
+session:
+  # Default agent and environment, as lockfile paths (relative to the lockfile).
+  agent: ./agents/migration-lead.md
+  environment: ./environments/production-host.yaml
+  # Attached to every session created by `swarm-agent run`; omit to disable.
+  memory_store: ./memory_stores/migration-journal.yaml
+  # Hard spend cap per session in USD cents; omit to run without a cap.
+  budget_cents: "5000"
+  # Approval policy for tool calls that pause for confirmation.
+  approvals: ./approvals.yaml

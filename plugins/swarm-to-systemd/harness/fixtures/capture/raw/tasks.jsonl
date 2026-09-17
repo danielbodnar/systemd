@@ -1,0 +1,4 @@
+{"ID":"t2","Name":"web_app.1","Image":"registry.example.com/acme/app:2026.09","Node":"swarm-wrk-1","DesiredState":"Running","CurrentState":"Running 3 days ago","Error":"","Ports":""}
+{"ID":"t3","Name":"web_app.2","Image":"registry.example.com/acme/app:2026.09","Node":"swarm-mgr-1","DesiredState":"Shutdown","CurrentState":"Failed 2 days ago","Error":"task: non-zero exit (137)","Ports":""}
+{"ID":"t9","Name":"\\_ web_app.2","Image":"registry.example.com/acme/app:2026.08","Node":"swarm-mgr-1","DesiredState":"Shutdown","CurrentState":"Shutdown 5 days ago","Error":"","Ports":""}
+{"ID":"t1","Name":"web_proxy.n1","Image":"docker.io/library/caddy:2","Node":"swarm-mgr-1","DesiredState":"Running","CurrentState":"Running 3 days ago","Error":"","Ports":"*:80->80/tcp"}

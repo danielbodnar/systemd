@@ -1,0 +1,2 @@
+name: Swarm migration journal
+description: Dated audit findings, decisions, and cutover results carried between sessions so a later run knows what changed since the last one.

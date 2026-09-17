@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+[Unit]
+Description=Resource slice for the swarm-agent worker and the commands it runs
+Documentation=https://platform.claude.com/docs/en/managed-agents/self-hosted-sandboxes
+
+[Slice]
+MemoryMax=2G
+MemoryHigh=1536M
+CPUWeight=50
+TasksMax=1024

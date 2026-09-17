@@ -1,0 +1,53 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+#
+# Self-hosted Managed Agents worker for the swarm-to-systemd harness.
+# The worker long-polls Anthropic's work queue (outbound only) and executes the
+# agent's bash and file tools on this host. It holds the environment key as a
+# systemd credential and never an organization API key.
+#
+# Install: see install-worker.sh. Key: systemd-creds encrypt --name=environment-key
+#          - /etc/credstore.encrypted/swarm-agent.environment-key
+
+[Unit]
+Description=swarm-agent self-hosted sandbox worker
+Documentation=https://platform.claude.com/docs/en/managed-agents/self-hosted-sandboxes
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=notify
+NotifyAccess=all
+Slice=swarm-agent.slice
+WorkingDirectory=/opt/swarm-agent/harness
+ExecStart=/usr/local/bin/bun run src/cli.ts worker --config /etc/swarm-agent/swarm-agent.yaml
+LoadCredentialEncrypted=environment-key:/etc/credstore.encrypted/swarm-agent.environment-key
+EnvironmentFile=-/etc/swarm-agent/worker.env
+Environment=HOME=/var/lib/swarm-agent
+StateDirectory=swarm-agent
+LogsDirectory=swarm-agent
+# The worker must reach the docker socket (audit) and Podman (verification);
+# it runs as root for that reason and relies on the approval policy, the
+# always_ask bash policy on writer agents, and the file-tool confinement for
+# safety. Tighten User= and the sandboxing below on hosts where the agent only
+# needs read access.
+UMask=0027
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectClock=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+ReadWritePaths=/var/lib/swarm-agent /mnt/memory
+Restart=on-failure
+RestartSec=10s
+KillSignal=SIGTERM
+KillMode=mixed
+TimeoutStopSec=90s
+
+[Install]
+WantedBy=multi-user.target

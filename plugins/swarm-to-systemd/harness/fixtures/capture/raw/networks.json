@@ -1,0 +1,6 @@
+[
+  { "Id": "net1", "Name": "web_frontend", "Driver": "overlay", "Scope": "swarm", "Ingress": false, "Internal": false, "Attachable": true, "EnableIPv6": false,
+    "IPAM": { "Driver": "default", "Config": [ { "Subnet": "10.10.1.0/24", "Gateway": "10.10.1.1" } ] }, "Options": { "encrypted": "" }, "Labels": { "com.docker.stack.namespace": "web" } },
+  { "Id": "net0", "Name": "ingress", "Driver": "overlay", "Scope": "swarm", "Ingress": true, "Internal": false, "Attachable": false, "EnableIPv6": false,
+    "IPAM": { "Driver": "default", "Config": [ { "Subnet": "10.0.0.0/24" } ] }, "Options": {}, "Labels": {} }
+]

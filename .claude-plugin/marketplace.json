@@ -1,0 +1,20 @@
+{
+  "name": "danielbodnar-systemd",
+  "owner": {
+    "name": "Daniel Bodnar",
+    "url": "https://github.com/danielbodnar"
+  },
+  "metadata": {
+    "description": "Plugins maintained alongside the systemd source tree: agent tooling for moving container orchestration onto systemd-native primitives."
+  },
+  "plugins": [
+    {
+      "name": "swarm-to-systemd",
+      "source": "./plugins/swarm-to-systemd",
+      "description": "Capture a Docker Swarm multi-node, multi-stack estate and migrate it to Podman Quadlet units under systemd, with a Managed Agents harness that runs the migration agents against production hosts.",
+      "version": "0.1.0",
+      "category": "infrastructure",
+      "keywords": ["docker", "swarm", "systemd", "quadlet", "podman", "migration", "managed-agents"]
+    }
+  ]
+}

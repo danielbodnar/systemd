@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.swarm-agent/
+workspace/
+secrets/
+*.log
