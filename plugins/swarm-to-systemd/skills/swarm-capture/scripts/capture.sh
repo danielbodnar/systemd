@@ -20,6 +20,12 @@ compose_dir=""
 capture_tasks=1
 keep_env=0
 secret_env_re='(pass(word)?|secret|token|api[_-]?key|private[_-]?key|credential|pwd|auth)'
+# Values are tested too: URI userinfo with a password, key=value pairs inside
+# a value, and command-line forms such as --password=x or -px. A bare
+# --password flag hides the argument that follows it.
+secret_value_re='://[^/@[:space:]]+:[^/@[:space:]]+@|(^|[;&?, ])(password|passwd|pwd|secret|token|api[_-]?key)='
+secret_arg_re='^-{1,2}(password|passwd|pwd|secret|token|api[_-]?key|auth)=|^-p[^-[:space:]]{3,}$'
+secret_flag_re='^-{1,2}(password|passwd|pwd|secret|token|api[_-]?key|auth)$'
 
 usage() {
     cat <<USAGE
@@ -56,8 +62,11 @@ if [ "$(docker info --format '{{.Swarm.ControlAvailable}}')" != "true" ]; then
     exit 1
 fi
 
+# The capture holds config payloads and full service specs, so the tree is
+# owner-only whatever the caller's umask.
+umask 077
 raw="$outdir/raw"
-mkdir -p "$raw"
+mkdir -p -m 0700 "$outdir" "$raw"
 
 # inspect_all TYPE FILE: inspect every object of TYPE into FILE as a JSON array.
 # A failing `ls` aborts the capture: an empty list must mean "none exist",
@@ -87,13 +96,24 @@ docker stack ls --format '{{json .}}' > "$raw/stacks.jsonl"
 docker service ls --format '{{json .}}' > "$raw/services.ls.jsonl"
 inspect_all service "$raw/services.json"
 if [ "$keep_env" -eq 0 ]; then
-    jq --arg re "$secret_env_re" '
+    jq --arg re "$secret_env_re" --arg vre "$secret_value_re" --arg are "$secret_arg_re" --arg fre "$secret_flag_re" '
+        def redact_argv:
+          if . == null then . else
+            reduce .[] as $a ({out: [], hide: false};
+              if .hide then {out: (.out + ["<redacted>"]), hide: false}
+              elif ($a | test($fre; "i")) then {out: (.out + [$a]), hide: true}
+              elif ($a | test($are; "i")) or ($a | test($vre; "i")) then {out: (.out + ["<redacted>"]), hide: false}
+              else {out: (.out + [$a]), hide: false} end) | .out
+          end;
         map(
           del(.PreviousSpec)
           | .Spec.TaskTemplate.ContainerSpec.Env |=
               (if . then map(
-                  if (split("=")[0] | test($re; "i")) then (split("=")[0] + "=<redacted>") else . end
+                  (split("=")[0]) as $k | (.[($k | length) + 1:]) as $v
+                  | if ($k | test($re; "i")) or ($v | test($vre; "i")) then ($k + "=<redacted>") else . end
                 ) else . end)
+          | .Spec.TaskTemplate.ContainerSpec.Command |= redact_argv
+          | .Spec.TaskTemplate.ContainerSpec.Args |= redact_argv
         )' "$raw/services.json" > "$raw/services.json.tmp"
     mv "$raw/services.json.tmp" "$raw/services.json"
 fi
@@ -126,8 +146,11 @@ fi
 if [ -n "$compose_dir" ]; then
     if [ -d "$compose_dir" ]; then
         mkdir -p "$outdir/compose"
-        # Only compose files. .env files and anything else that may hold
-        # credentials are never copied into the capture.
+        # Only *.yml and *.yaml are copied; .env files are excluded by pattern.
+        # Compose files themselves often carry inline credentials under
+        # environment:, and nothing redacts them here, so the compose/ copy
+        # is secret material and the tree is owner-only for that reason.
+        echo "warning: compose files may hold inline credentials; treat $outdir/compose as secret material" >&2
         find "$compose_dir" -maxdepth 2 -type f \( -name '*.yml' -o -name '*.yaml' \) -exec cp --parents {} "$outdir/compose/" \;
     else
         echo "compose dir $compose_dir does not exist; skipping" >&2

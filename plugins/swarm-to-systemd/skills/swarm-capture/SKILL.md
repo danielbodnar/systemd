@@ -47,7 +47,7 @@ Do not treat a clean capture as a clean estate. Look for these signs and report 
 
 ## Files
 
-- `scripts/capture.sh`: read-only capture on a manager node; requires `docker` and `jq` (for redaction). Produces `raw/*.json` and `manifest.json`.
+- `scripts/capture.sh`: read-only capture on a manager node; requires `docker` and `jq` (for redaction). Produces `raw/*.json` and `manifest.json`. The output tree is created owner-only (mode 0700). Compose files copied with `--compose-dir` are not redacted and often hold inline credentials, so treat `compose/` as secret material.
 - `scripts/normalize.ts`: Bun script, no dependencies; converts a capture directory into `inventory.json` and validates the required structure before writing.
 - `references/inventory-schema.json`: the inventory contract.
 - `references/field-notes.md`: where each inventory field comes from in the Docker API, and the conversions applied. Read it when a value looks surprising.
