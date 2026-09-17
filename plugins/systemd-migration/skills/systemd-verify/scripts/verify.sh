@@ -49,15 +49,19 @@ done
 [ -f "$expected" ] || { echo "expected file not found: $expected" >&2; exit 2; }
 command -v jq >/dev/null || { echo "jq is required" >&2; exit 2; }
 
-# The native render driver keys hosts at the top level; the Quadlet renderer
-# keeps them under .hosts. Either way the host's entry is what is checked.
+# The render driver keys hosts at the top level and records root_kind; the
+# standalone Quadlet renderer keeps them under .hosts with containers only.
+# Either way the host's entry is what is checked.
 host_entry='(if has("hosts") then .hosts else . end)[$h]'
 if ! jq -e --arg h "$host" "$host_entry" "$expected" >/dev/null; then
     echo "no plan for host $host in $expected (known: $(jq -r '(if has("hosts") then .hosts else . end) | keys | join(", ")' "$expected"))" >&2
     exit 2
 fi
 if [ -z "$engine" ]; then
-    if jq -e --arg h "$host" "$host_entry | has(\"containers\")" "$expected" >/dev/null; then
+    # A standalone Quadlet tree has containers and no root_kind; a tree from
+    # the render driver is checked by the native engine, which also covers
+    # the Quadlet containers the plan placed on the host.
+    if jq -e --arg h "$host" "$host_entry | (has(\"root_kind\") | not) and ((.containers // []) | length > 0)" "$expected" >/dev/null; then
         engine="quadlet"
     else
         engine="native"
@@ -105,6 +109,23 @@ check_ports() {
             record fail "port-listening" "$p not listening"
         fi
     done
+}
+
+check_container() {
+    # check_container NAME: the container exists and is healthy, or running when it has no healthcheck
+    local c="$1" health running
+    if podman container exists "$c" 2>/dev/null; then
+        health="$(podman inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$c" 2>/dev/null)"
+        running="$(podman inspect --format '{{.State.Running}}' "$c" 2>/dev/null)"
+        case "$health" in
+            healthy) record ok "container-health" "$c healthy" ;;
+            none) [ "$running" = "true" ] && record ok "container-health" "$c running (no healthcheck)" || record fail "container-health" "$c not running" ;;
+            starting) record warn "container-health" "$c still starting" ;;
+            *) record fail "container-health" "$c is $health" ;;
+        esac
+    else
+        record fail "container-exists" "$c not found"
+    fi
 }
 
 check_restart_loops() {
@@ -157,7 +178,7 @@ stub_commands() {
 }
 
 native_dry_run() {
-    local tree u kind names=() tmp err m img c v
+    local tree u kind names=() quadlets=() tmp err m img c v gen
     [ -n "$units_dir" ] || units_dir="/etc/systemd/system"
     [ -d "$units_dir" ] || { echo "units directory not found: $units_dir" >&2; exit 2; }
     tree="$(cd "$units_dir/../.." && pwd)"   # the host's etc/
@@ -168,11 +189,28 @@ native_dry_run() {
             if [ -f "$units_dir/$u" ]; then
                 record ok "unit-file" "$u present"
                 names+=("$u")
+            elif [ "$kind" = "units" ] && [ -f "$tree/containers/systemd/${u%.service}.container" ]; then
+                # A service the plan gave the Quadlet form: Podman's generator produces the unit.
+                record ok "quadlet-file" "${u%.service}.container present"
+                quadlets+=("$u")
             else
                 record fail "unit-file" "$u missing from $units_dir"
             fi
         done < <(expect_list "$kind")
     done
+    if [ "${#quadlets[@]}" -gt 0 ]; then
+        if gen="$(find_generator)"; then
+            tmp="$(mktemp -d)"
+            if QUADLET_UNIT_DIRS="$tree/containers/systemd" "$gen" --dryrun > "$tmp/generated.txt" 2> "$tmp/generator.err"; then
+                record ok "quadlet-generator" "generated $(grep -c '^---' "$tmp/generated.txt" 2>/dev/null || echo 0) units"
+            else
+                record fail "quadlet-generator" "$(tr '\n' ' ' < "$tmp/generator.err" | cut -c1-300)"
+            fi
+            rm -rf "$tmp"
+        else
+            record warn "quadlet-generator" "podman-system-generator not found; ${#quadlets[@]} Quadlet units cannot be checked here"
+        fi
+    fi
     while IFS= read -r m; do
         [ -n "$m" ] || continue
         if [ -f "$tree/systemd/nspawn/$m.nspawn" ]; then
@@ -268,6 +306,29 @@ native_live() {
             record fail "machine-running" "$m is ${state:-not registered}"
         fi
     done < <(expect_list machines)
+    # Quadlet containers and their secrets on a host the render driver composed.
+    while IFS= read -r c; do
+        [ -n "$c" ] || continue
+        check_container "$c"
+    done < <(expect_list containers)
+    while IFS= read -r c; do
+        [ -n "$c" ] || continue
+        podman secret exists "$c" 2>/dev/null && record ok "secret" "$c" || record fail "secret" "$c missing"
+    done < <(expect_list secrets)
+    # Rendered network files (networkd zone bridges, transports, macvlan) are
+    # named by their basename; Podman network names are the Quadlet engine's.
+    while IFS= read -r c; do
+        [ -n "$c" ] || continue
+        case "$c" in
+            *.network|*.netdev)
+                if [ -f "/etc/systemd/network/$c" ]; then
+                    record ok "network-file" "$c"
+                else
+                    record fail "network-file" "$c missing from /etc/systemd/network"
+                fi
+                ;;
+        esac
+    done < <(expect_list networks)
     check_ports
     while IFS= read -r c; do
         [ -n "$c" ] || continue
@@ -352,7 +413,7 @@ quadlet_dry_run() {
 }
 
 quadlet_live() {
-    local u state c health running n v s
+    local u state c n v s
     mapfile -t exp_containers < <(expect_list containers)
     mapfile -t exp_networks < <(expect_list networks)
     mapfile -t exp_secrets < <(expect_list secrets)
@@ -366,18 +427,7 @@ quadlet_live() {
         fi
     done
     for c in "${exp_containers[@]}"; do
-        if podman container exists "$c" 2>/dev/null; then
-            health="$(podman inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$c" 2>/dev/null)"
-            running="$(podman inspect --format '{{.State.Running}}' "$c" 2>/dev/null)"
-            case "$health" in
-                healthy) record ok "container-health" "$c healthy" ;;
-                none) [ "$running" = "true" ] && record ok "container-health" "$c running (no healthcheck)" || record fail "container-health" "$c not running" ;;
-                starting) record warn "container-health" "$c still starting" ;;
-                *) record fail "container-health" "$c is $health" ;;
-            esac
-        else
-            record fail "container-exists" "$c not found"
-        fi
+        check_container "$c"
     done
     check_ports
     for n in "${exp_networks[@]}"; do

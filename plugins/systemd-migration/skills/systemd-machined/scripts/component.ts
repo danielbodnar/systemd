@@ -107,6 +107,8 @@ export const machinedComponent: Component = {
     const tmpfiles = new Map<string, string[]>();
     const configs = new Map<string, { data: string | null; uid: string; gid: string; mode: number; stack: string }>();
     for (const inst of ctx.instances) {
+      // Podman pulls the image of a Quadlet container itself; nothing to mount on the host.
+      if (inst.form === "quadlet") continue;
       const svc = inst.service;
       const name = imageName(svc.image);
       const root = form === "ddi" ? `${imageDir}/${name}.raw` : `${imageDir}/${name}.mstack`;
@@ -274,9 +276,13 @@ function renderMachine(
   if (svc.read_only && svc.mounts.length) ctx.note(`${service}: the root is read-only (ReadOnly=yes); every mount target (${svc.mounts.map((m) => m.target).join(", ")}) must already exist in the image, as systemd-nspawn cannot create it`);
 
   // [Network]: the zone the networkd component decided, or the host's namespace.
+  // A macvlan or ipvlan network is not a zone: the networkd component adds
+  // MACVLAN= or IPVLAN= on the parent link instead, and a Zone= line would
+  // make nspawn create an unused bridge beside it.
   const zone = ctx.valueOr(zoneDecisionId(service), "");
+  const zoneDriver = ctx.inventory.networks.find((x) => x.name === zone)?.driver;
   if (zone === "host") n.add("Network", "Private", "no");
-  else if (zone) n.add("Network", "Zone", zone);
+  else if (zone && zoneDriver !== "macvlan" && zoneDriver !== "ipvlan") n.add("Network", "Zone", zone);
 
   // The drop-in: the unit systemd-nspawn@.service instantiates, with the stack's grouping, the credentials, and the limits.
   d.add("Unit", "PartOf", `${stack}.target`);

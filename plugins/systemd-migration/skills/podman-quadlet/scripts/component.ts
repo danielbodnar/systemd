@@ -147,9 +147,13 @@ export const quadletComponent: Component = {
       ctx.file(`${unitDirRel(unitDir)}/${r.unitName}.container`, r.text);
       const unit = `${r.unitName}.service`;
       ctx.expect("units", unit);
+      ctx.expect("containers", r.unitName);
       ctx.wantedByStack(inst.stack, unit);
       for (const p of r.ports) ctx.expectPort(p.port, p.protocol);
-      for (const s of r.secrets) if (!secrets.includes(s.name)) secrets.push(s.name);
+      for (const s of r.secrets) {
+        if (!secrets.includes(s.name)) secrets.push(s.name);
+        ctx.expect("secrets", s.name);
+      }
       for (const n of r.networks) if (!networks.includes(n)) networks.push(n);
       for (const v of r.volumes) if (!volumes.includes(v)) volumes.push(v);
       for (const s of r.synthesized) synthesized.set(s.name, { driver: s.driver, options: s.options });

@@ -13,6 +13,8 @@
   "mounts": [],
   "sockets": [],
   "machines": [],
+  "containers": [],
+  "secrets": [],
   "networks": [
     "web_frontend"
   ],

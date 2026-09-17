@@ -1,6 +1,6 @@
 # Verification checks
 
-The engine is chosen from the host's entry in `expected.json`: an entry with a `containers` list is a Quadlet tree, anything else is a native tree. `--engine` overrides the choice.
+The engine is chosen from the host's entry in `expected.json`: an entry with containers and no `root_kind` comes from the standalone Quadlet renderer and is a Quadlet tree; an entry from the render driver (it always carries `root_kind`) is checked by the native engine, which also covers the Quadlet containers the plan placed on that host. `--engine` overrides the choice.
 
 ## Native engine, dry-run
 
@@ -8,6 +8,8 @@ The engine is chosen from the host's entry in `expected.json`: an entry with a `
 |---|---|---|
 | `unit-file` | file test for every name under `units`, `targets`, `slices`, `timers`, `mounts`, `sockets` | The rendered tree for this host is incomplete or the wrong host's tree was copied. |
 | `machine-file` | file test for `etc/systemd/nspawn/<machine>.nspawn` | The machine form was decided for a service but its settings file is missing from the tree. |
+| `quadlet-file` | file test for `etc/containers/systemd/<name>.container` when a unit under `units` has no unit file | A service the plan gave the Quadlet form; Podman's generator produces its `.service`. |
+| `quadlet-generator` | `QUADLET_UNIT_DIRS=<tree>/containers/systemd podman-system-generator --dryrun`, when the tree has `.container` files | A key the installed Podman does not know, or a syntax error; a warning when Podman is not installed on the host running the dry-run. |
 | `systemd-analyze` | `systemd-analyze --root=<tmp> verify --recursive-errors=no <units>` over a copy of the tree with a stub for every `Exec*=` command | A directive the host's systemd does not know, a missing dependency, or an ordering cycle. The detail carries every line the manager printed, with the temporary prefix stripped. |
 | `image` | file test for each path under `images` | Warning: the image is not pulled yet; `pull-images.sh` does that before `install.sh`. |
 | `credential` | file test in `/etc/credstore.encrypted` and `/etc/credstore` | Warning: `secrets/import-credentials.sh` has not run on this host. |
@@ -21,12 +23,15 @@ The engine is chosen from the host's entry in `expected.json`: an entry with a `
 | `unit-active` | `systemctl is-active <unit>` for units, targets, slices, timers, mounts, sockets | Unit failed or never started; `systemctl status` and `journalctl -u` explain why. |
 | `unit-result` | `systemctl show -p Result` for `*-health.service` and `*-restart.service` | The last healthcheck run failed, or the restart unit ran and failed. These oneshot units are inactive between timer runs, so their result is what is checked. |
 | `machine-running` | `machinectl show -p State <machine>` | The container is not registered or not running; `journalctl -u systemd-nspawn@<machine>` explains why. |
+| `container-exists`, `container-health` | `podman inspect` for each name under `containers` | A Quadlet container the plan placed on this host is missing, unhealthy, or still within its start period. |
+| `secret` | `podman secret exists` for each name under `secrets` | `import-secrets.sh` was not run on this host. |
+| `network-file` | file test in `/etc/systemd/network` for each `.network` or `.netdev` basename under `networks` | A rendered zone bridge, transport, or macvlan file was not installed. |
 | `port-listening` | `ss -ltunH` | Nothing bound the expected port on this host. |
 | `credential` | file test in the credential stores | The credential was never imported, or was removed. |
 | `volume` | directory test | The volume directory is missing. |
 | `restart-loop` | `systemctl show -p NRestarts` | More than three restarts since the unit started; the workload is crashing. |
 
-Networks are not checked by this script: the networkd component's expectations (bridges, overlays, leases) are verified by its own subtest and by `networkctl status` on the host.
+Whether networkd accepted the installed files (bridges, overlays, leases) is the networkd subtest's job and `networkctl status` on the host; this script checks only that the files are in place.
 
 ## Quadlet engine, dry-run
 

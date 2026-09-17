@@ -84,6 +84,10 @@ export interface HostExpectation {
   mounts: string[];
   sockets: string[];
   machines: string[];
+  /** Container names of the services rendered as Quadlet containers; the Podman verifier checks them. */
+  containers: string[];
+  /** Podman secret names the Quadlet containers reference; imported by import-secrets.sh. */
+  secrets: string[];
   networks: string[];
   ports: { port: number; protocol: string }[];
   credentials: string[];
@@ -152,6 +156,8 @@ export class RenderContext {
       mounts: [],
       sockets: [],
       machines: [],
+      containers: [],
+      secrets: [],
       networks: [],
       ports: [],
       credentials: [],
@@ -217,7 +223,7 @@ export class RenderContext {
   }
 
   /** Append to a list in expected.json without duplicates. */
-  expect<K extends "units" | "targets" | "slices" | "timers" | "mounts" | "sockets" | "machines" | "networks" | "credentials" | "images" | "volumes">(key: K, value: string): void {
+  expect<K extends "units" | "targets" | "slices" | "timers" | "mounts" | "sockets" | "machines" | "containers" | "secrets" | "networks" | "credentials" | "images" | "volumes">(key: K, value: string): void {
     const list = this.expected[key];
     if (!list.includes(value)) list.push(value);
   }

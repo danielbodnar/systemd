@@ -5,7 +5,7 @@
 // engine needs Podman and is covered by the integration test.
 
 import { describe, expect, test } from "bun:test";
-import { cpSync, existsSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const script = resolve(import.meta.dir, "../../skills/systemd-verify/scripts/verify.sh");
@@ -86,6 +86,22 @@ describe("verify.sh, native engine", () => {
     expect(unknown.stderr.toString()).toContain("known: swarm-mgr-1, swarm-wrk-1");
     const engine = Bun.spawnSync(["bash", script, "--expected", join(native, "expected.json"), "--host", "swarm-mgr-1", "--engine", "docker"]);
     expect(engine.exitCode).toBe(2);
+  });
+
+  test("a Quadlet container the plan placed on a native host is checked by its .container file", () => {
+    const dir = mkdtempSync(resolve(import.meta.dir, "../.tmp/verify-"));
+    const units = join(dir, "etc/systemd/system");
+    cpSync(join(native, "hosts/swarm-mgr-1/etc/systemd/system"), units, { recursive: true });
+    mkdirSync(join(dir, "etc/containers/systemd"), { recursive: true });
+    writeFileSync(join(dir, "etc/containers/systemd/web_app.container"), "[Container]\nImage=example.test/app:1\n");
+    const expected = join(dir, "expected.json");
+    writeFileSync(expected, JSON.stringify({ h: { hostname: "h", units: ["web_proxy.service", "web_app.service"], containers: ["web_app"], secrets: ["k"], root_kind: "RootMStack" } }));
+    const { report } = run(["--expected", expected, "--host", "h", "--units", units, "--dry-run"]);
+    expect(report.engine).toBe("native");
+    expect(report.checks.find((c) => c.check === "quadlet-file")?.detail).toBe("web_app.container present");
+    expect(report.checks.filter((c) => c.check === "unit-file" && c.status === "fail")).toEqual([]);
+    expect(report.checks.find((c) => c.check === "quadlet-generator")).toBeDefined();
+    rmSync(dir, { recursive: true, force: true });
   });
 
   test("the Quadlet shape under .hosts selects the quadlet engine", () => {

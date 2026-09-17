@@ -88,6 +88,8 @@ describe("rendering the quadlet form", () => {
     expect(r.files[`${host}/etc/containers/systemd/web_frontend.network`]).toContain("NetworkName=web_frontend");
     expect(r.files[`${host}/etc/containers/systemd/web_cache.volume`]).toContain("VolumeName=web_cache");
     expect(r.hosts["swarm-wrk-1"]!.networks).toContain("web_frontend");
+    expect(r.hosts["swarm-wrk-1"]!.containers).toEqual(["web_app"]);
+    expect(r.hosts["swarm-wrk-1"]!.secrets).toEqual(["web_app-app-secret-key", "web_app_signing_key"]);
     expect(r.hosts["swarm-wrk-1"]!.volumes).toContain("web_cache");
   });
 

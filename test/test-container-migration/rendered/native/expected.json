@@ -14,6 +14,8 @@
     "mounts": [],
     "sockets": [],
     "machines": [],
+    "containers": [],
+    "secrets": [],
     "networks": [
       "web_frontend"
     ],
@@ -58,6 +60,8 @@
     ],
     "sockets": [],
     "machines": [],
+    "containers": [],
+    "secrets": [],
     "networks": [
       "data_backend",
       "data_monitoring",

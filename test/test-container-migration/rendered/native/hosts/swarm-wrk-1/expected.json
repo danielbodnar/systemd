@@ -26,6 +26,8 @@
   ],
   "sockets": [],
   "machines": [],
+  "containers": [],
+  "secrets": [],
   "networks": [
     "data_backend",
     "data_monitoring",

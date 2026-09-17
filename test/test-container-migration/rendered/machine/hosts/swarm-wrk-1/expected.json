@@ -25,6 +25,8 @@
   "machines": [
     "web_app"
   ],
+  "containers": [],
+  "secrets": [],
   "networks": [
     "data_backend",
     "data_monitoring",

@@ -306,6 +306,8 @@ describe("macvlan", () => {
     expect(parent).toContain("MACVLAN=mv-data_monitoring");
     expect(r.files[`${WRK}/${NET}/25-migration-mv-data_monitoring.network`]).toContain("Address=192.168.50.129/25");
     expect(r.files[`${WRK}/etc/systemd/nspawn/data_exporter.nspawn`]).toContain("MACVLAN=eth1");
+    // The machine sits on the parent's segment, so no zone bridge is created beside it.
+    expect(r.files[`${WRK}/etc/systemd/nspawn/data_exporter.nspawn`]).not.toContain("Zone=");
     expect(r.files[`${WRK}/${NET}/25-migration-vz-data_monitoring.network`]).toBeUndefined();
     expect(r.files[`${WRK}/etc/hosts.d/systemd-migration.hosts`]).toContain("192.168.50.130 data_exporter exporter");
     resolveDecision(plan, parentId("data_monitoring"), "eth2");

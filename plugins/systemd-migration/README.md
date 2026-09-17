@@ -20,7 +20,7 @@ Nothing in the plan is assumed. Address ranges, overlay transports, load-balanci
 | Directory | Holds |
 |---|---|
 | `contract/` | The inventory schema, the directive catalogue generated from `man/`, the unit builder, the component interface, the plan schema, and the component registry (`contract/README.md`) |
-| `skills/discover-*` | Adapters: `discover-docker-swarm` (capture and normalize a Swarm), `discover-systemd-hosts` (probe what each target host's systemd can do), `discover-podman` (planned) |
+| `skills/discover-*` | Adapters: `discover-docker-swarm` (capture and normalize a Swarm), `discover-systemd-hosts` (probe what each target host's systemd can do), `discover-podman` (capture and normalize a Podman host, pods and existing Quadlet files included) |
 | `skills/migration-planner` | The translation map, `plan.yaml`, and the guided review |
 | `skills/systemd-*` | One skill per systemd component; each ships `scripts/component.ts` and the references that explain the mapping |
 | `skills/podman-quadlet` | The Podman adapter target: everything the Quadlet renderer did before, selectable per service by the plan |
