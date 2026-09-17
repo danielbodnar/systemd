@@ -544,9 +544,10 @@ value with `format: ipv4`, defaulting to an address from a decided VIP range
 `/etc/systemd-migration/stacks.d/<stack>.conf` per stack (an `.ini` with the
 stack's units, slice settings, and `WantedBy=`); on every boot and
 `daemon-reload` the generator emits `<stack>.target`, `stack-<stack>.slice`,
-and the `Wants=` symlinks into the early generator directory, so the host
-carries no generated grouping units under `/etc/systemd/system` and an
-operator edits the description rather than re-rendering. The service and
+and the `Wants=` symlinks into the normal generator directory, so a unit an
+operator writes under `/etc/systemd/system` still wins, the host carries no
+generated grouping units of its own, and an operator edits the description
+rather than re-rendering. The service and
 resource-control components already skip the target and slice files when the
 generator is chosen.
 
@@ -623,9 +624,9 @@ run on the booted image:
    leases).
 2. `haproxy-ingress`: the adapter component reading the `haproxy` publish
    decisions, the rendered configuration and unit, health checks from the
-   source healthcheck, `.haproxy.sh` (skips without the binary).
+   source healthcheck, `.haproxy.sh` (skips without the binary). Done.
 3. `systemd-generator`: 10.3, the generator script, the preset file, the
-   `stacks.d` description, `.generator.sh`.
+   `stacks.d` description, `.generator.sh`. Done.
 4. `systemd-rollout`: 10.4, the controller, the specification, the harness
-   task, the command, `.rollout.sh` over the committed native tree.
-5. `systemd-service` and `contract/placement.ts`: 10.6.
+   task, the command, `.rollout.sh` over the committed native tree. Done.
+5. `systemd-service` and `contract/placement.ts`: 10.6. Done.

@@ -43,6 +43,8 @@ Nothing in the plan is assumed. Address ranges, overlay transports, load-balanci
 | `systemd-storage` | `systemd.mount(5)`, `tmpfiles.d(5)`, `repart.d(5)`, `sysusers.d(5)` | mounts, directories, partitions, users |
 | `systemd-sysext` | `systemd-sysext(8)` | system and configuration extensions |
 | `systemd-portable` | `portablectl(1)`, `capsule@.service(5)` | portable services, capsules |
+| `systemd-generator` | `systemd.generator(7)`, `systemd.preset(5)` | the stack description under `/etc/systemd-migration/stacks.d/` and the generator that turns it into stack targets and slices at boot, the preset file that decides the enable state |
+| `systemd-rollout` | `systemctl(1)`, `systemd-run(1)`, `systemd.v(7)` | the rollout specification under `/etc/systemd-migration/rollout/` and the `stackctl` controller that deploys, rolls back, drains, scales, and rotates |
 
 ## Installing
 
