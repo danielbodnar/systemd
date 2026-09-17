@@ -23,7 +23,7 @@ StartLimitBurst=5
 
 [Service]
 Type=notify
-NotifyAccess=all
+NotifyAccess=main
 User=swarm-agent-tools
 # The primary group owns the runtime directory, the socket, and the token
 # file; only the worker is a member besides the executor itself. The shared

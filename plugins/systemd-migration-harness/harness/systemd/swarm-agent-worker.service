@@ -34,7 +34,7 @@ StartLimitBurst=5
 
 [Service]
 Type=notify
-NotifyAccess=all
+NotifyAccess=main
 User=swarm-agent
 Group=swarm-agent
 # Membership of swarm-agent-ipc is what admits the worker to the executor's

@@ -12,10 +12,15 @@ export async function tools(cfg: Config): Promise<number> {
     console.error("refusing to start: the tool executor must run without any Anthropic credential in its environment");
     return 2;
   }
+  // Keep the manager's notify socket to ourselves: the bash tool inherits
+  // this environment, and NotifyAccess=main already drops anything a child
+  // sends, but a command that runs here has no business seeing the path.
+  const notifySocket = process.env.NOTIFY_SOCKET;
+  delete process.env.NOTIFY_SOCKET;
   const controller = new AbortController();
   const stop = (sig: string) => {
     console.error(`received ${sig}; closing the tool socket`);
-    notifySystemd("STOPPING=1");
+    notifySystemd("STOPPING=1", notifySocket);
     controller.abort();
   };
   process.once("SIGTERM", () => stop("SIGTERM"));
@@ -27,7 +32,7 @@ export async function tools(cfg: Config): Promise<number> {
       signal: controller.signal,
       onListening: () => {
         console.error(`tool executor listening on ${cfg.worker.tools_socket}`);
-        notifySystemd("READY=1");
+        notifySystemd("READY=1", notifySocket);
       },
     });
     return 0;
