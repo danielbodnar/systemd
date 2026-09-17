@@ -407,6 +407,7 @@ if install_tests
                 'test-journals',
                 'test-network',
                 'test-network-generator-conversion',
+                'test-container-migration',
                 'test-path',
                 'test-path-util',
                 'test-sched-prio',

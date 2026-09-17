@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { normalize, validate } from "../../../docker-swarm-to-systemd/skills/docker-swarm-to-inventory/scripts/normalize.ts";
 import { durationToSeconds, nsToDuration } from "../../../docker-swarm-to-systemd/contract/types.ts";
 
-const capture = resolve(import.meta.dir, "../fixtures/capture");
+const capture = resolve(import.meta.dir, "../../../../test/test-container-migration/capture");
 
 describe("normalize", () => {
   const inv = normalize(capture);
@@ -11,7 +11,10 @@ describe("normalize", () => {
     expect(inv.cluster.managers).toBe(1);
     expect(inv.cluster.workers).toBe(1);
     expect(inv.nodes.map((n) => n.hostname)).toEqual(["swarm-mgr-1", "swarm-wrk-1"]);
-    expect(inv.stacks).toEqual([{ name: "web", services: ["web_app", "web_proxy"] }]);
+    expect(inv.stacks).toEqual([
+      { name: "data", services: ["data_exporter", "data_postgres"] },
+      { name: "web", services: ["web_app", "web_proxy"] },
+    ]);
   });
   test("flattens the service spec", () => {
     const app = inv.services.find((s) => s.name === "web_app")!;
@@ -67,21 +70,21 @@ describe("durations", () => {
 
 describe("value-aware redaction and schema validation", () => {
   test("credentials embedded in values are redacted even under innocuous names", () => {
-    const dir = resolve(import.meta.dir, "../fixtures/capture");
+    const dir = resolve(import.meta.dir, "../../../../test/test-container-migration/capture");
     const inv = normalize(dir);
     // The fixture's DATABASE_URL has no password, so it survives.
     expect(inv.services.find((s) => s.name === "web_app")?.env.DATABASE_URL).toContain("postgres://app@");
   });
   test("is_leader uses the capturing node id", () => {
-    const inv = normalize(resolve(import.meta.dir, "../fixtures/capture"));
+    const inv = normalize(resolve(import.meta.dir, "../../../../test/test-container-migration/capture"));
     expect(inv.cluster.is_leader).toBe(true);
   });
   test("a volume missing from the capturing node is flagged", () => {
-    const inv = normalize(resolve(import.meta.dir, "../fixtures/capture"));
+    const inv = normalize(resolve(import.meta.dir, "../../../../test/test-container-migration/capture"));
     expect(inv.warnings.some((w) => w.includes("volume") && w.includes("node-local"))).toBe(false);
   });
   test("validate rejects a document that breaks the schema", () => {
-    const inv = normalize(resolve(import.meta.dir, "../fixtures/capture"));
+    const inv = normalize(resolve(import.meta.dir, "../../../../test/test-container-migration/capture"));
     const broken = JSON.parse(JSON.stringify(inv));
     broken.services[0].ports[0].protocol = "icmp";
     delete broken.warnings;

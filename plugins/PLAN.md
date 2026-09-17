@@ -400,6 +400,18 @@ applied when it arrives.
 
 ## 9. Status
 
+Phase 2 is complete on the same branch: `build-catalog.ts` generates
+`contract/directives.json` from `man/` (34 pages, about 2200 directives, line
+types, options, and verbs with the version each was added in), `contract/catalog.ts`
+checks unit-style files against it and the tree's own `units/` and `network/`
+pass, `references/translation-map.json` holds the static map with every
+directive validated against the catalogue, `plan-map.ts` selects the rows an
+estate needs and writes `TRANSLATION-MAP.md`, the fixture estate lives under
+`test/test-container-migration/` (registered in `test/meson.build`), and
+`docs/MIGRATING_CONTAINERS_TO_SYSTEMD.md` carries the map in prose. This
+checkout is 262~rc3, so the catalogue records that version; the stated floor
+of 261 stands for target hosts.
+
 Phase 1 is complete on the `claude/swarm-to-systemd-agent-gcqvex` branch: the
 marketplace is `systemd-dev-plugins`, the first-generation plugin is split into
 `docker-swarm-to-systemd`, `podman-container-to-quadlet`, and

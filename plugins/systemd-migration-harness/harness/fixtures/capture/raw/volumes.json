@@ -1,1 +1,0 @@
-[ { "Name": "web_cache", "Driver": "local", "Scope": "local", "Mountpoint": "/var/lib/docker/volumes/web_cache/_data", "Options": null, "Labels": { "com.docker.stack.namespace": "web" } } ]

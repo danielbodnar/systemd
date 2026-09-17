@@ -7,9 +7,9 @@ The source side of the `systemd-dev-plugins` migration set. It captures what a m
 | Skill | Purpose | Ships |
 |---|---|---|
 | `docker-swarm-to-inventory` | Read-only capture of nodes, stacks, services, tasks, networks, volumes, secrets, and configs into a schema-validated `inventory.json` | `capture.sh`, `normalize.ts`, field notes, an example inventory |
-| `docker-to-systemd-planner` | The plan: host mapping, networking after the overlay, secrets sourcing, storage moves, ordered runbooks with rollback | plan template, networking, secrets, storage, runbook references |
+| `docker-to-systemd-planner` | The translation map (which systemd target expresses each Docker concept, with directives, fidelity, and minimum version) and the plan: host mapping, networking after the overlay, secrets sourcing, storage moves, ordered runbooks with rollback | `plan-map.ts`, `build-catalog.ts`, the static translation map, plan template, networking, secrets, storage, runbook references |
 
-`contract/` holds the inventory JSON Schema, its TypeScript types, and a dependency-free validator. It is the source that every other plugin vendors; see `contract/README.md`.
+`contract/` holds the inventory JSON Schema, its TypeScript types, a dependency-free validator, and the directive catalogue generated from the systemd tree's man pages with its lookup module. It is the source that every other plugin vendors; see `contract/README.md`.
 
 Subagents `swarm-auditor` and `migration-planner` pair the skills with a scope and a tool set. The slash commands `/swarm-capture` and `/swarm-plan` run them from a project directory.
 
