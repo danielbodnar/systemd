@@ -17,6 +17,14 @@
       "keywords": ["docker", "swarm", "inventory", "systemd", "migration", "planning"]
     },
     {
+      "name": "oci-image-to-systemd",
+      "source": "./plugins/oci-image-to-systemd",
+      "description": "Run container images as native systemd services: pull them into mount stacks with importctl, render per-host units with RootMStack=, credentials, mounts, and health timers.",
+      "version": "0.2.0",
+      "category": "infrastructure",
+      "keywords": ["systemd", "oci", "mstack", "RootMStack", "credentials", "migration"]
+    },
+    {
       "name": "podman-container-to-quadlet",
       "source": "./plugins/podman-container-to-quadlet",
       "description": "Render the inventory into per-host Podman Quadlet units, stack targets, and install scripts.",

@@ -110,13 +110,29 @@ if [ "$keep_env" -eq 0 ]; then
           | .Spec.TaskTemplate.ContainerSpec.Env |=
               (if . then map(
                   (split("=")[0]) as $k | (.[($k | length) + 1:]) as $v
-                  | if ($k | test($re; "i")) or ($v | test($vre; "i")) then ($k + "=<redacted>") else . end
+                  | if ((($k | test("_FILE$")) and ($v | startswith("/"))) | not) and (($k | test($re; "i")) or ($v | test($vre; "i"))) then ($k + "=<redacted>") else . end
                 ) else . end)
           | .Spec.TaskTemplate.ContainerSpec.Command |= redact_argv
           | .Spec.TaskTemplate.ContainerSpec.Args |= redact_argv
         )' "$raw/services.json" > "$raw/services.json.tmp"
     mv "$raw/services.json.tmp" "$raw/services.json"
 fi
+
+# Image configuration (entrypoint, command, environment, working directory,
+# user) is not part of a service spec and is dropped by importctl pull-oci,
+# so record it for every image that is present on this node. Images that
+# only exist on other nodes are skipped; normalize.ts warns about them.
+: > "$raw/images.jsonl"
+while IFS= read -r img; do
+    [ -n "$img" ] || continue
+    docker image inspect "$img" 2>/dev/null | jq -c ".[]" >> "$raw/images.jsonl" || true
+done < <(docker service ls --format "{{.Image}}" | sort -u)
+jq -s --arg re "$secret_env_re" --arg vre "$secret_value_re" --argjson keep "$keep_env" '
+    map(.Config.Env |= (if . and $keep == 0 then map(
+            (split("=")[0]) as $k | (.[($k | length) + 1:]) as $v
+            | if ((($k | test("_FILE$")) and ($v | startswith("/"))) | not) and (($k | test($re; "i")) or ($v | test($vre; "i"))) then ($k + "=<redacted>") else . end
+        ) else . end))' "$raw/images.jsonl" > "$raw/images.json"
+rm -f "$raw/images.jsonl"
 
 docker network ls --format '{{json .}}' > "$raw/networks.ls.jsonl"
 inspect_all network "$raw/networks.json"

@@ -11,7 +11,7 @@ import { join, resolve } from "node:path";
 
 const pluginsDir = resolve(import.meta.dir, "../../..");
 const sourceDir = join(pluginsDir, "docker-swarm-to-systemd", "contract");
-const files = ["inventory-schema.json", "types.ts", "schema.ts", "directives.json", "catalog.ts"];
+const files = ["inventory-schema.json", "types.ts", "schema.ts", "directives.json", "catalog.ts", "placement.ts", "unit.ts"];
 
 function sha256(buf: Buffer): string {
   return createHash("sha256").update(buf).digest("hex");

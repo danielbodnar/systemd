@@ -12,6 +12,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type {
+  ImageConfig,
   Config, FileRef, Healthcheck, Inventory, Mount, Network, Node, Port, ResourceSpec,
   Secret, Service, Stack, Task, UpdateConfig, Volume,
 } from "../../../contract/types.ts";
@@ -58,7 +59,9 @@ function envToMap(list: string[] | undefined, keepValues: boolean): { env: Recor
     const idx = entry.indexOf("=");
     const key = idx === -1 ? entry : entry.slice(0, idx);
     const value = idx === -1 ? "" : entry.slice(idx + 1);
-    if (!keepValues && (SECRET_ENV.test(key) || SECRET_VALUE.test(value))) {
+    // A *_FILE variable whose value is a path names where a secret lives, and is not one itself.
+    const pathToSecret = key.endsWith("_FILE") && value.startsWith("/");
+    if (!keepValues && !pathToSecret && (SECRET_ENV.test(key) || SECRET_VALUE.test(value))) {
       env[key] = "<redacted>";
       redacted.push(key);
     } else {
@@ -346,6 +349,41 @@ function configs(raw: Json[], svcs: Service[]): Config[] {
   }));
 }
 
+/** Image configuration for the references the services use, from docker image inspect on the capturing node. */
+function images(raw: Json[], svcs: Service[], keepEnv: boolean, warnings: string[]): ImageConfig[] {
+  const out: ImageConfig[] = [];
+  const refs = new Map<string, string[]>();
+  for (const s of svcs) refs.set(s.image, [...(refs.get(s.image) ?? []), s.name]);
+  for (const [ref, users] of [...refs].sort()) {
+    const short = ref.replace(/^docker\.io\/(library\/)?/, "");
+    const hit = raw.find((i) => (i.RepoTags ?? []).some((t: string) => t === ref || t === short || t.replace(/^docker\.io\/(library\/)?/, "") === short));
+    if (!hit) {
+      warnings.push(`image ${ref}: not present on the capturing node, so its entrypoint, command, and environment are unknown; the rendered ExecStart= needs a review (used by ${users.join(", ")})`);
+      continue;
+    }
+    const cfg = hit.Config ?? {};
+    const digests: string[] = hit.RepoDigests ?? [];
+    const digest = digests.map((d) => d.slice(d.indexOf("@") + 1)).find((d) => /^sha256:[0-9a-f]{64}$/.test(d)) ?? null;
+    const { env, redacted } = envToMap(cfg.Env, keepEnv);
+    out.push({
+      ref,
+      id: hit.Id ?? null,
+      digest,
+      entrypoint: cfg.Entrypoint ?? [],
+      cmd: cfg.Cmd ?? [],
+      env,
+      redacted_env: redacted,
+      workdir: cfg.WorkingDir || null,
+      user: cfg.User || null,
+      exposed_ports: Object.keys(cfg.ExposedPorts ?? {}).sort(),
+      volumes: Object.keys(cfg.Volumes ?? {}).sort(),
+      labels: labelsOf(cfg.Labels),
+      used_by: users.sort(),
+    });
+  }
+  return out;
+}
+
 function stacks(svcs: Service[]): Stack[] {
   const m = new Map<string, string[]>();
   for (const s of svcs) if (s.stack) m.set(s.stack, [...(m.get(s.stack) ?? []), s.name]);
@@ -401,6 +439,7 @@ export function normalize(dir: string, opts: { keepEnvValues?: boolean } = {}): 
     configs: configs(readJson(dir, "configs.json"), svcs),
     warnings,
   };
+  if (existsSync(join(dir, "raw", "images.json"))) inv.images = images(readJson(dir, "images.json"), svcs, Boolean(opts.keepEnvValues), warnings);
   validate(inv);
   return inv;
 }

@@ -1,0 +1,22 @@
+{
+  "name": "oci-image-to-systemd",
+  "displayName": "OCI images to native systemd services",
+  "version": "0.2.0",
+  "description": "Run container images as native systemd services with no container runtime: pull OCI images into mount stacks with importctl pull-oci (or pack them into discoverable disk images for older hosts), and render an inventory from docker-swarm-to-systemd into per-host service units with RootMStack=, stack targets and slices, health timers, credentials, mounts, tmpfiles, and install scripts. Use it when the user wants containers under systemd without Docker or Podman, asks about RootMStack=, .mstack directories, importctl, systemd-creds, or wants plain service units for a Swarm or Compose estate.",
+  "author": {
+    "name": "Daniel Bodnar",
+    "url": "https://github.com/danielbodnar"
+  },
+  "repository": "https://github.com/danielbodnar/systemd",
+  "license": "LGPL-2.1-or-later",
+  "keywords": ["systemd", "oci", "mstack", "importctl", "RootMStack", "credentials", "docker", "swarm", "migration"],
+  "userConfig": {
+    "inventory_dir": {
+      "type": "directory",
+      "title": "Inventory directory",
+      "description": "Where inventory.json is read from and the rendered tree is written. Defaults to ./.swarm-migration inside the project, matching docker-swarm-to-systemd.",
+      "required": false,
+      "default": ".swarm-migration"
+    }
+  }
+}

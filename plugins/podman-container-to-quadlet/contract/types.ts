@@ -22,6 +22,8 @@ export interface Inventory {
   secrets: Secret[];
   configs: Config[];
   warnings: string[];
+  /** Present when the capture ran on a node that had the images; absent images produce a warning. */
+  images?: ImageConfig[];
 }
 
 export interface Cluster {
@@ -214,6 +216,24 @@ export interface Config {
   created_at: string;
   data_base64: string | null;
   stack: string | null;
+  used_by: string[];
+}
+
+/** Configuration of an image as docker image inspect reports it on the capturing node. */
+export interface ImageConfig {
+  /** The reference as the services name it, without digest. */
+  ref: string;
+  id: string | null;
+  digest: string | null;
+  entrypoint: string[];
+  cmd: string[];
+  env: Record<string, string>;
+  redacted_env: string[];
+  workdir: string | null;
+  user: string | null;
+  exposed_ports: string[];
+  volumes: string[];
+  labels: Record<string, string>;
   used_by: string[];
 }
 

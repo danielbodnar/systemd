@@ -1,0 +1,8 @@
+# Rendered by docker-image-to-service: resource group of swarm stack web on swarm-wrk-1
+
+[Unit]
+Description=swarm stack web slice
+
+[Slice]
+MemoryAccounting=yes
+TasksAccounting=yes

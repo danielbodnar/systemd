@@ -1,0 +1,17 @@
+# Rendered by docker-image-to-service: healthcheck of swarm service web_app, run by web_app-health.timer
+
+[Unit]
+Description=healthcheck for web_app
+After=web_app.service
+BindsTo=web_app.service
+OnFailure=web_app-restart.service
+
+[Service]
+Type=oneshot
+Slice=stack-web.slice
+RootMStack=/var/lib/machines/acme-app_2026.09.mstack
+MountAPIVFS=yes
+PrivateUsers=self
+ExecStart=/bin/sh -c "for i in $(seq 3); do if ( curl -fsS http://localhost:8080/healthz || exit 1 ); then exit 0; fi; sleep 1; done; exit 1"
+TimeoutStartSec=18
+SyslogIdentifier=web_app-health

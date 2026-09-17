@@ -17,7 +17,7 @@ set -euo pipefail
 
 plugins_dir="$(cd "$(dirname "$0")/.." && pwd)"
 source_dir="$plugins_dir/docker-swarm-to-systemd/contract"
-files=(inventory-schema.json types.ts schema.ts directives.json catalog.ts)
+files=(inventory-schema.json types.ts schema.ts directives.json catalog.ts placement.ts unit.ts)
 mode="sync"
 [ "${1:-}" = "--check" ] && mode="check"
 

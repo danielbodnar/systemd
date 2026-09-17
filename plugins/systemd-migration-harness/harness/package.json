@@ -11,7 +11,7 @@
   "scripts": {
     "check": "tsc --noEmit",
     "test": "bun test",
-    "lint": "cd ../.. && systemd-migration-harness/harness/node_modules/.bin/oxlint systemd-migration-harness/harness/src systemd-migration-harness/harness/test docker-swarm-to-systemd/contract docker-swarm-to-systemd/skills/docker-swarm-to-inventory/scripts docker-swarm-to-systemd/skills/docker-to-systemd-planner/scripts podman-container-to-quadlet/skills/podman-container-to-quadlet/scripts",
+    "lint": "cd ../.. && systemd-migration-harness/harness/node_modules/.bin/oxlint systemd-migration-harness/harness/src systemd-migration-harness/harness/test docker-swarm-to-systemd/contract docker-swarm-to-systemd/skills/docker-swarm-to-inventory/scripts docker-swarm-to-systemd/skills/docker-to-systemd-planner/scripts oci-image-to-systemd/skills/docker-image-to-service/scripts podman-container-to-quadlet/skills/podman-container-to-quadlet/scripts",
     "cli": "bun run src/cli.ts"
   },
   "engines": {

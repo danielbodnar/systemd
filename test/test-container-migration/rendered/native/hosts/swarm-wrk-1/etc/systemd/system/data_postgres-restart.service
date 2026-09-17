@@ -1,0 +1,8 @@
+# Rendered by docker-image-to-service: restarts swarm service data_postgres after 5 failed healthchecks
+
+[Unit]
+Description=restart data_postgres after a failed healthcheck
+
+[Service]
+Type=oneshot
+ExecStart=systemctl restart data_postgres.service

@@ -1,0 +1,917 @@
+{
+  "version": "1",
+  "captured_at": "2026-09-01T12:00:00Z",
+  "captured_on": "swarm-mgr-1",
+  "cluster": {
+    "id": "abc123",
+    "engine_version": "27.3.1",
+    "managers": 1,
+    "workers": 1,
+    "is_leader": true
+  },
+  "nodes": [
+    {
+      "id": "n1",
+      "hostname": "swarm-mgr-1",
+      "role": "manager",
+      "leader": true,
+      "availability": "active",
+      "state": "ready",
+      "addr": "10.0.0.11",
+      "labels": {
+        "tier": "edge"
+      },
+      "engine_labels": {},
+      "engine_version": "27.3.1",
+      "os": "linux",
+      "arch": "x86_64",
+      "nano_cpus": 4000000000,
+      "memory_bytes": 8589934592
+    },
+    {
+      "id": "n2",
+      "hostname": "swarm-wrk-1",
+      "role": "worker",
+      "leader": false,
+      "availability": "active",
+      "state": "ready",
+      "addr": "10.0.0.12",
+      "labels": {
+        "db": "true"
+      },
+      "engine_labels": {
+        "storage": "ssd"
+      },
+      "engine_version": "27.3.1",
+      "os": "linux",
+      "arch": "x86_64",
+      "nano_cpus": 8000000000,
+      "memory_bytes": 17179869184
+    }
+  ],
+  "stacks": [
+    {
+      "name": "data",
+      "services": [
+        "data_exporter",
+        "data_postgres"
+      ]
+    },
+    {
+      "name": "web",
+      "services": [
+        "web_app",
+        "web_proxy"
+      ]
+    }
+  ],
+  "services": [
+    {
+      "id": "s2",
+      "name": "web_app",
+      "short_name": "app",
+      "stack": "web",
+      "image": "registry.example.com/acme/app:2026.09",
+      "image_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000002",
+      "command": [],
+      "args": [
+        "serve",
+        "--port",
+        "8080"
+      ],
+      "env": {
+        "DATABASE_URL": "postgres://app@data_postgres:5432/app",
+        "APP_SECRET_KEY": "<redacted>",
+        "LOG_LEVEL": "info"
+      },
+      "redacted_env": [
+        "APP_SECRET_KEY"
+      ],
+      "labels": {
+        "com.docker.stack.namespace": "web"
+      },
+      "container_labels": {},
+      "mode": "replicated",
+      "replicas": 2,
+      "placement": {
+        "constraints": [
+          "node.role == worker"
+        ],
+        "preferences": [],
+        "max_replicas_per_node": 1,
+        "platforms": []
+      },
+      "networks": [
+        {
+          "name": "net1",
+          "aliases": [
+            "app"
+          ]
+        }
+      ],
+      "ports": [
+        {
+          "target": 8080,
+          "published": 8080,
+          "protocol": "tcp",
+          "mode": "ingress"
+        }
+      ],
+      "mounts": [
+        {
+          "type": "tmpfs",
+          "source": null,
+          "target": "/tmp",
+          "readonly": false,
+          "tmpfs_size_bytes": 67108864
+        },
+        {
+          "type": "volume",
+          "source": "web_cache",
+          "target": "/cache",
+          "readonly": false,
+          "volume_nocopy": false
+        }
+      ],
+      "secrets": [
+        {
+          "name": "web_app_signing_key",
+          "id": "sec1",
+          "target": "signing_key",
+          "uid": "1000",
+          "gid": "1000",
+          "mode": 256
+        }
+      ],
+      "configs": [],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "curl -fsS http://localhost:8080/healthz || exit 1"
+        ],
+        "interval": "15s",
+        "timeout": "5s",
+        "retries": 3,
+        "start_period": "20s"
+      },
+      "resources": {
+        "limits": {
+          "nano_cpus": 1500000000,
+          "memory_bytes": 536870912,
+          "pids": 512
+        },
+        "reservations": {
+          "nano_cpus": null,
+          "memory_bytes": 134217728,
+          "pids": null
+        }
+      },
+      "restart_policy": {
+        "condition": "on-failure",
+        "delay": "3s",
+        "max_attempts": 5,
+        "window": "2m"
+      },
+      "update_config": {
+        "parallelism": 1,
+        "delay": "10s",
+        "failure_action": "rollback",
+        "monitor": "30s",
+        "max_failure_ratio": 0,
+        "order": "start-first"
+      },
+      "rollback_config": null,
+      "stop_grace_period": "30s",
+      "stop_signal": null,
+      "user": "1000:1000",
+      "workdir": "/srv/app",
+      "hostname": null,
+      "dns": {
+        "nameservers": [],
+        "search": [],
+        "options": []
+      },
+      "extra_hosts": [
+        "10.0.9.9 legacy.internal"
+      ],
+      "cap_add": [],
+      "cap_drop": [
+        "ALL"
+      ],
+      "sysctls": {
+        "net.core.somaxconn": "1024"
+      },
+      "ulimits": [
+        {
+          "name": "nofile",
+          "soft": 65536,
+          "hard": 65536
+        }
+      ],
+      "read_only": true,
+      "init": true,
+      "tty": false,
+      "privileged": false,
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-size": "10m"
+        }
+      },
+      "endpoint_mode": "vip",
+      "tasks": [
+        {
+          "id": "t2",
+          "node": "swarm-wrk-1",
+          "desired_state": "running",
+          "current_state": "running",
+          "error": ""
+        },
+        {
+          "id": "t3",
+          "node": "swarm-mgr-1",
+          "desired_state": "shutdown",
+          "current_state": "failed",
+          "error": "task: non-zero exit (137)"
+        }
+      ]
+    },
+    {
+      "id": "s1",
+      "name": "web_proxy",
+      "short_name": "proxy",
+      "stack": "web",
+      "image": "docker.io/library/caddy:2",
+      "image_digest": null,
+      "command": [],
+      "args": [],
+      "env": {
+        "CADDY_ADMIN": "off"
+      },
+      "redacted_env": [],
+      "labels": {
+        "com.docker.stack.namespace": "web"
+      },
+      "container_labels": {},
+      "mode": "global",
+      "replicas": null,
+      "placement": {
+        "constraints": [
+          "node.labels.tier == edge"
+        ],
+        "preferences": [],
+        "max_replicas_per_node": null,
+        "platforms": []
+      },
+      "networks": [
+        {
+          "name": "net1",
+          "aliases": [
+            "proxy"
+          ]
+        }
+      ],
+      "ports": [
+        {
+          "target": 80,
+          "published": 80,
+          "protocol": "tcp",
+          "mode": "host"
+        }
+      ],
+      "mounts": [],
+      "secrets": [],
+      "configs": [
+        {
+          "name": "web_caddyfile",
+          "id": "c1",
+          "target": "/etc/caddy/Caddyfile",
+          "uid": "0",
+          "gid": "0",
+          "mode": 292
+        }
+      ],
+      "healthcheck": null,
+      "resources": {
+        "limits": {
+          "nano_cpus": null,
+          "memory_bytes": null,
+          "pids": null
+        },
+        "reservations": {
+          "nano_cpus": null,
+          "memory_bytes": null,
+          "pids": null
+        }
+      },
+      "restart_policy": {
+        "condition": "any",
+        "delay": "5s",
+        "max_attempts": null,
+        "window": null
+      },
+      "update_config": null,
+      "rollback_config": null,
+      "stop_grace_period": null,
+      "stop_signal": null,
+      "user": null,
+      "workdir": null,
+      "hostname": null,
+      "dns": {
+        "nameservers": [],
+        "search": [],
+        "options": []
+      },
+      "extra_hosts": [],
+      "cap_add": [
+        "NET_BIND_SERVICE"
+      ],
+      "cap_drop": [],
+      "sysctls": {},
+      "ulimits": [],
+      "read_only": false,
+      "init": false,
+      "tty": false,
+      "privileged": false,
+      "logging": {
+        "driver": null,
+        "options": {}
+      },
+      "endpoint_mode": "vip",
+      "tasks": [
+        {
+          "id": "t1",
+          "node": "swarm-mgr-1",
+          "desired_state": "running",
+          "current_state": "running",
+          "error": ""
+        }
+      ]
+    },
+    {
+      "id": "s3",
+      "name": "data_postgres",
+      "short_name": "postgres",
+      "stack": "data",
+      "image": "docker.io/library/postgres:16.4",
+      "image_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000003",
+      "command": [],
+      "args": [],
+      "env": {
+        "POSTGRES_DB": "app",
+        "POSTGRES_USER": "app",
+        "POSTGRES_PASSWORD_FILE": "/run/secrets/postgres_password",
+        "PGDATA": "/var/lib/postgresql/data/pgdata"
+      },
+      "redacted_env": [],
+      "labels": {
+        "com.docker.stack.namespace": "data"
+      },
+      "container_labels": {},
+      "mode": "replicated",
+      "replicas": 1,
+      "placement": {
+        "constraints": [
+          "node.labels.db == true"
+        ],
+        "preferences": [],
+        "max_replicas_per_node": null,
+        "platforms": []
+      },
+      "networks": [
+        {
+          "name": "net2",
+          "aliases": [
+            "postgres",
+            "db"
+          ]
+        }
+      ],
+      "ports": [],
+      "mounts": [
+        {
+          "type": "volume",
+          "source": "data_pgdata",
+          "target": "/var/lib/postgresql/data",
+          "readonly": false,
+          "volume_nocopy": false
+        },
+        {
+          "type": "volume",
+          "source": "data_backups",
+          "target": "/backups",
+          "readonly": false,
+          "volume_nocopy": false,
+          "volume_driver": "local",
+          "volume_options": {
+            "type": "nfs",
+            "o": "addr=10.0.0.50,rw,nfsvers=4",
+            "device": ":/exports/backups"
+          }
+        },
+        {
+          "type": "bind",
+          "source": "/etc/localtime",
+          "target": "/etc/localtime",
+          "readonly": true
+        }
+      ],
+      "secrets": [
+        {
+          "name": "data_postgres_password",
+          "id": "sec2",
+          "target": "postgres_password",
+          "uid": "999",
+          "gid": "999",
+          "mode": 256
+        }
+      ],
+      "configs": [],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "pg_isready -U app"
+        ],
+        "interval": "10s",
+        "timeout": "5s",
+        "retries": 5,
+        "start_period": "30s"
+      },
+      "resources": {
+        "limits": {
+          "nano_cpus": 2000000000,
+          "memory_bytes": 2147483648,
+          "pids": null
+        },
+        "reservations": {
+          "nano_cpus": null,
+          "memory_bytes": 1073741824,
+          "pids": null
+        }
+      },
+      "restart_policy": {
+        "condition": "any",
+        "delay": "5s",
+        "max_attempts": null,
+        "window": null
+      },
+      "update_config": {
+        "parallelism": 1,
+        "delay": "0s",
+        "failure_action": "pause",
+        "monitor": "5s",
+        "max_failure_ratio": 0,
+        "order": "stop-first"
+      },
+      "rollback_config": null,
+      "stop_grace_period": "1m",
+      "stop_signal": "SIGINT",
+      "user": null,
+      "workdir": null,
+      "hostname": null,
+      "dns": {
+        "nameservers": [],
+        "search": [],
+        "options": []
+      },
+      "extra_hosts": [],
+      "cap_add": [],
+      "cap_drop": [],
+      "sysctls": {
+        "kernel.shmmax": "1073741824"
+      },
+      "ulimits": [
+        {
+          "name": "nofile",
+          "soft": 16384,
+          "hard": 16384
+        }
+      ],
+      "read_only": false,
+      "init": false,
+      "tty": false,
+      "privileged": false,
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-size": "50m",
+          "max-file": "3"
+        }
+      },
+      "endpoint_mode": "dnsrr",
+      "tasks": [
+        {
+          "id": "t4",
+          "node": "swarm-wrk-1",
+          "desired_state": "running",
+          "current_state": "running",
+          "error": ""
+        }
+      ]
+    },
+    {
+      "id": "s4",
+      "name": "data_exporter",
+      "short_name": "exporter",
+      "stack": "data",
+      "image": "quay.io/prometheuscommunity/postgres-exporter:v0.15.0",
+      "image_digest": null,
+      "command": [],
+      "args": [],
+      "env": {
+        "DATA_SOURCE_URI": "postgres:5432/app?sslmode=disable",
+        "DATA_SOURCE_USER": "app",
+        "DATA_SOURCE_PASS_FILE": "/run/secrets/postgres_password"
+      },
+      "redacted_env": [],
+      "labels": {
+        "com.docker.stack.namespace": "data"
+      },
+      "container_labels": {},
+      "mode": "replicated",
+      "replicas": 1,
+      "placement": {
+        "constraints": [
+          "node.labels.db == true"
+        ],
+        "preferences": [],
+        "max_replicas_per_node": null,
+        "platforms": []
+      },
+      "networks": [
+        {
+          "name": "net2",
+          "aliases": [
+            "exporter"
+          ]
+        },
+        {
+          "name": "net3",
+          "aliases": []
+        }
+      ],
+      "ports": [
+        {
+          "target": 9187,
+          "published": 9187,
+          "protocol": "tcp",
+          "mode": "host"
+        }
+      ],
+      "mounts": [],
+      "secrets": [
+        {
+          "name": "data_postgres_password",
+          "id": "sec2",
+          "target": "postgres_password",
+          "uid": "0",
+          "gid": "0",
+          "mode": 256
+        }
+      ],
+      "configs": [],
+      "healthcheck": null,
+      "resources": {
+        "limits": {
+          "nano_cpus": null,
+          "memory_bytes": 134217728,
+          "pids": null
+        },
+        "reservations": {
+          "nano_cpus": null,
+          "memory_bytes": null,
+          "pids": null
+        }
+      },
+      "restart_policy": {
+        "condition": "any",
+        "delay": "5s",
+        "max_attempts": null,
+        "window": null
+      },
+      "update_config": null,
+      "rollback_config": null,
+      "stop_grace_period": null,
+      "stop_signal": null,
+      "user": null,
+      "workdir": null,
+      "hostname": null,
+      "dns": {
+        "nameservers": [],
+        "search": [],
+        "options": []
+      },
+      "extra_hosts": [],
+      "cap_add": [],
+      "cap_drop": [
+        "ALL"
+      ],
+      "sysctls": {},
+      "ulimits": [],
+      "read_only": true,
+      "init": false,
+      "tty": false,
+      "privileged": false,
+      "logging": {
+        "driver": null,
+        "options": {}
+      },
+      "endpoint_mode": "vip",
+      "tasks": [
+        {
+          "id": "t5",
+          "node": "swarm-wrk-1",
+          "desired_state": "running",
+          "current_state": "running",
+          "error": ""
+        }
+      ]
+    }
+  ],
+  "networks": [
+    {
+      "id": "net1",
+      "name": "web_frontend",
+      "driver": "overlay",
+      "scope": "swarm",
+      "ingress": false,
+      "internal": false,
+      "attachable": true,
+      "encrypted": true,
+      "ipv6": false,
+      "ipam": {
+        "driver": "default",
+        "config": [
+          {
+            "subnet": "10.10.1.0/24",
+            "gateway": "10.10.1.1"
+          }
+        ]
+      },
+      "options": {
+        "encrypted": ""
+      },
+      "labels": {
+        "com.docker.stack.namespace": "web"
+      },
+      "stack": "web",
+      "used_by": [
+        "web_app",
+        "web_proxy"
+      ]
+    },
+    {
+      "id": "net0",
+      "name": "ingress",
+      "driver": "overlay",
+      "scope": "swarm",
+      "ingress": true,
+      "internal": false,
+      "attachable": false,
+      "encrypted": false,
+      "ipv6": false,
+      "ipam": {
+        "driver": "default",
+        "config": [
+          {
+            "subnet": "10.0.0.0/24"
+          }
+        ]
+      },
+      "options": {},
+      "labels": {},
+      "stack": null,
+      "used_by": []
+    },
+    {
+      "id": "net2",
+      "name": "data_backend",
+      "driver": "overlay",
+      "scope": "swarm",
+      "ingress": false,
+      "internal": true,
+      "attachable": false,
+      "encrypted": true,
+      "ipv6": false,
+      "ipam": {
+        "driver": "default",
+        "config": [
+          {
+            "subnet": "10.10.2.0/24",
+            "gateway": "10.10.2.1"
+          }
+        ]
+      },
+      "options": {
+        "encrypted": ""
+      },
+      "labels": {
+        "com.docker.stack.namespace": "data"
+      },
+      "stack": "data",
+      "used_by": [
+        "data_postgres",
+        "data_exporter"
+      ]
+    },
+    {
+      "id": "net3",
+      "name": "data_monitoring",
+      "driver": "macvlan",
+      "scope": "swarm",
+      "ingress": false,
+      "internal": false,
+      "attachable": true,
+      "encrypted": false,
+      "ipv6": false,
+      "ipam": {
+        "driver": "default",
+        "config": [
+          {
+            "subnet": "192.168.50.0/24",
+            "gateway": "192.168.50.1",
+            "ip_range": "192.168.50.128/25"
+          }
+        ]
+      },
+      "options": {
+        "parent": "eth1"
+      },
+      "labels": {
+        "com.docker.stack.namespace": "data"
+      },
+      "stack": "data",
+      "used_by": [
+        "data_exporter"
+      ]
+    }
+  ],
+  "volumes": [
+    {
+      "name": "web_cache",
+      "driver": "local",
+      "scope": "local",
+      "mountpoint": "/var/lib/docker/volumes/web_cache/_data",
+      "options": {},
+      "labels": {
+        "com.docker.stack.namespace": "web"
+      },
+      "stack": "web",
+      "used_by": [
+        "web_app"
+      ]
+    },
+    {
+      "name": "data_pgdata",
+      "driver": "local",
+      "scope": "local",
+      "mountpoint": "/var/lib/docker/volumes/data_pgdata/_data",
+      "options": {},
+      "labels": {
+        "com.docker.stack.namespace": "data"
+      },
+      "stack": "data",
+      "used_by": [
+        "data_postgres"
+      ]
+    },
+    {
+      "name": "data_backups",
+      "driver": "local",
+      "scope": "local",
+      "mountpoint": "/var/lib/docker/volumes/data_backups/_data",
+      "options": {
+        "type": "nfs",
+        "o": "addr=10.0.0.50,rw,nfsvers=4",
+        "device": ":/exports/backups"
+      },
+      "labels": {
+        "com.docker.stack.namespace": "data"
+      },
+      "stack": "data",
+      "used_by": [
+        "data_postgres"
+      ]
+    }
+  ],
+  "secrets": [
+    {
+      "id": "sec1",
+      "name": "web_app_signing_key",
+      "labels": {
+        "com.docker.stack.namespace": "web"
+      },
+      "created_at": "2026-01-01T00:00:00Z",
+      "stack": "web",
+      "used_by": [
+        "web_app"
+      ]
+    },
+    {
+      "id": "sec2",
+      "name": "data_postgres_password",
+      "labels": {
+        "com.docker.stack.namespace": "data"
+      },
+      "created_at": "2026-01-01T00:00:00Z",
+      "stack": "data",
+      "used_by": [
+        "data_postgres",
+        "data_exporter"
+      ]
+    }
+  ],
+  "configs": [
+    {
+      "id": "c1",
+      "name": "web_caddyfile",
+      "labels": {
+        "com.docker.stack.namespace": "web"
+      },
+      "created_at": "2026-01-01T00:00:00Z",
+      "data_base64": "OjgwIHsKICByZXNwb25kICJvayIKfQo=",
+      "stack": "web",
+      "used_by": [
+        "web_proxy"
+      ]
+    }
+  ],
+  "warnings": [
+    "service web_proxy: image docker.io/library/caddy:2 is not pinned to a digest",
+    "service data_exporter: image quay.io/prometheuscommunity/postgres-exporter:v0.15.0 is not pinned to a digest",
+    "service web_app: task t3 on swarm-mgr-1 is failed (task: non-zero exit (137))",
+    "service web_app: publishes through the ingress routing mesh; systemd hosts publish per host",
+    "network web_frontend: encrypted overlay; cross-host transport must be replaced (see docker-to-systemd-planner/references/networking.md)",
+    "network data_backend: encrypted overlay; cross-host transport must be replaced (see docker-to-systemd-planner/references/networking.md)",
+    "image docker.io/library/postgres:16.4: not present on the capturing node, so its entrypoint, command, and environment are unknown; the rendered ExecStart= needs a review (used by data_postgres)",
+    "image quay.io/prometheuscommunity/postgres-exporter:v0.15.0: not present on the capturing node, so its entrypoint, command, and environment are unknown; the rendered ExecStart= needs a review (used by data_exporter)"
+  ],
+  "images": [
+    {
+      "ref": "docker.io/library/caddy:2",
+      "id": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000004",
+      "entrypoint": [],
+      "cmd": [
+        "caddy",
+        "run",
+        "--config",
+        "/etc/caddy/Caddyfile",
+        "--adapter",
+        "caddyfile"
+      ],
+      "env": {
+        "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "CADDY_VERSION": "v2.8.4",
+        "XDG_CONFIG_HOME": "/config",
+        "XDG_DATA_HOME": "/data"
+      },
+      "redacted_env": [],
+      "workdir": "/srv",
+      "user": null,
+      "exposed_ports": [
+        "2019/tcp",
+        "443/tcp",
+        "443/udp",
+        "80/tcp"
+      ],
+      "volumes": [],
+      "labels": {
+        "org.opencontainers.image.title": "Caddy"
+      },
+      "used_by": [
+        "web_proxy"
+      ]
+    },
+    {
+      "ref": "registry.example.com/acme/app:2026.09",
+      "id": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000002",
+      "entrypoint": [
+        "/usr/bin/app"
+      ],
+      "cmd": [
+        "serve"
+      ],
+      "env": {
+        "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin/bin",
+        "APP_HOME": "/srv/app"
+      },
+      "redacted_env": [],
+      "workdir": "/srv/app",
+      "user": "1000:1000",
+      "exposed_ports": [
+        "8080/tcp"
+      ],
+      "volumes": [
+        "/cache"
+      ],
+      "labels": {
+        "org.opencontainers.image.source": "https://git.example.com/acme/app"
+      },
+      "used_by": [
+        "web_app"
+      ]
+    }
+  ]
+}

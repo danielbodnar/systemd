@@ -28,7 +28,12 @@
     "volumes": { "type": "array", "items": { "$ref": "#/$defs/volume" } },
     "secrets": { "type": "array", "items": { "$ref": "#/$defs/secret" } },
     "configs": { "type": "array", "items": { "$ref": "#/$defs/config" } },
-    "warnings": { "type": "array", "items": { "type": "string" } }
+    "warnings": { "type": "array", "items": { "type": "string" } },
+    "images": {
+      "type": "array",
+      "description": "Configuration of the images the services run, for images present on the capturing node; importctl pull-oci does not preserve it, so the renderers take entrypoint, command, environment, working directory, and user from here",
+      "items": { "$ref": "#/$defs/image" }
+    }
   },
   "$defs": {
     "stringMap": { "type": "object", "additionalProperties": { "type": "string" } },
@@ -303,6 +308,25 @@
         "options": { "$ref": "#/$defs/stringMap" },
         "labels": { "$ref": "#/$defs/stringMap" },
         "stack": { "type": ["string", "null"] },
+        "used_by": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "image": {
+      "type": "object",
+      "required": ["ref", "id", "digest", "entrypoint", "cmd", "env", "redacted_env", "workdir", "user", "exposed_ports", "volumes", "labels", "used_by"],
+      "properties": {
+        "ref": { "type": "string", "description": "the reference as the services name it, without digest" },
+        "id": { "type": ["string", "null"] },
+        "digest": { "type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$" },
+        "entrypoint": { "type": "array", "items": { "type": "string" } },
+        "cmd": { "type": "array", "items": { "type": "string" } },
+        "env": { "$ref": "#/$defs/stringMap" },
+        "redacted_env": { "type": "array", "items": { "type": "string" } },
+        "workdir": { "type": ["string", "null"] },
+        "user": { "type": ["string", "null"] },
+        "exposed_ports": { "type": "array", "items": { "type": "string" } },
+        "volumes": { "type": "array", "items": { "type": "string" } },
+        "labels": { "$ref": "#/$defs/stringMap" },
         "used_by": { "type": "array", "items": { "type": "string" } }
       }
     },

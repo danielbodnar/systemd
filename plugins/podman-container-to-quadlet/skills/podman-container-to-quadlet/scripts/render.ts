@@ -13,8 +13,12 @@
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { Inventory, Node, Service, Task } from "../../../contract/types.ts";
+import type { Inventory, Service } from "../../../contract/types.ts";
 import { durationToSeconds } from "../../../contract/types.ts";
+import { nodeMatchesPlatform, nodeSatisfies, parseConstraint, placeService } from "../../../contract/placement.ts";
+import { UnitFile, cpuQuota, healthCommand, octal, quote } from "../../../contract/unit.ts";
+
+export { nodeMatchesPlatform, nodeSatisfies, parseConstraint, placeService };
 
 export interface RenderOptions {
   outDir: string;
@@ -43,134 +47,10 @@ export interface RenderResult {
   notes: string[];
 }
 
-// ---------- placement ----------
+// ---------- unit rendering helpers (placement and the unit builder come from the contract) ----------
 
-interface Constraint { key: string; op: "==" | "!="; value: string }
-
-export function parseConstraint(raw: string): Constraint | null {
-  const m = raw.match(/^\s*([\w.\-/]+)\s*(==|!=)\s*(.+?)\s*$/);
-  if (!m) return null;
-  return { key: m[1], op: m[2] as "==" | "!=", value: m[3] };
-}
-
-const ARCH_ALIASES: Record<string, string> = { amd64: "x86_64", x86_64: "x86_64", arm64: "aarch64", aarch64: "aarch64", arm: "arm", armv7l: "arm", "386": "i386", i386: "i386", ppc64le: "ppc64le", s390x: "s390x", riscv64: "riscv64" };
-
-export function normalizeArch(a: string): string {
-  return ARCH_ALIASES[a.toLowerCase()] ?? a.toLowerCase();
-}
-
-/** True when the node satisfies at least one of the service's platform constraints (or none are set). */
-export function nodeMatchesPlatform(node: Node, platforms: string[]): boolean {
-  if (platforms.length === 0) return true;
-  return platforms.some((p) => {
-    const [os, arch] = p.split("/");
-    return (!os || os.toLowerCase() === node.os.toLowerCase()) && (!arch || normalizeArch(arch) === normalizeArch(node.arch));
-  });
-}
-
-function nodeValue(node: Node, key: string): string | undefined {
-  if (key === "node.id") return node.id;
-  if (key === "node.hostname") return node.hostname;
-  if (key === "node.role") return node.role;
-  if (key === "node.platform.os") return node.os;
-  if (key === "node.platform.arch") return node.arch;
-  if (key.startsWith("node.labels.")) return node.labels[key.slice("node.labels.".length)];
-  if (key.startsWith("engine.labels.")) return node.engine_labels[key.slice("engine.labels.".length)];
-  return undefined;
-}
-
-export function nodeSatisfies(node: Node, constraints: string[]): boolean {
-  for (const raw of constraints) {
-    const c = parseConstraint(raw);
-    if (!c) return false;
-    const v = nodeValue(node, c.key);
-    const eq = v !== undefined && v === c.value;
-    if (c.op === "==" && !eq) return false;
-    if (c.op === "!=" && eq) return false;
-  }
-  return true;
-}
-
-/** Decide which hosts run a service, and how many instances each host gets. */
-export function placeService(svc: Service, nodes: Node[], opts: { hostMap?: Record<string, string[]>; scaleOut?: boolean }, notes: string[]): Map<string, number> {
-  const placement = new Map<string, number>();
-  const override = opts.hostMap?.[svc.name];
-  if (override) {
-    for (const h of override) placement.set(h, (placement.get(h) ?? 0) + 1);
-    return placement;
-  }
-  const candidates = nodes.filter((n) => n.availability === "active" && n.state === "ready" && nodeSatisfies(n, svc.placement.constraints) && nodeMatchesPlatform(n, svc.placement.platforms));
-  if (candidates.length === 0) {
-    notes.push(`${svc.name}: no node satisfies constraints ${JSON.stringify(svc.placement.constraints)}${svc.placement.platforms.length ? ` and platforms ${svc.placement.platforms.join(", ")}` : ""}; rendered nowhere, add a host-map entry`);
-    return placement;
-  }
-  if (svc.mode === "global" || svc.mode === "global-job") {
-    for (const n of candidates) placement.set(n.hostname, 1);
-    return placement;
-  }
-  const wanted = svc.replicas ?? 1;
-  const perNodeCap = svc.placement.max_replicas_per_node ?? (opts.scaleOut ? Number.POSITIVE_INFINITY : 1);
-  const running = new Set(svc.tasks.filter((t: Task) => t.desired_state === "running").map((t) => t.node));
-  const ordered = [...candidates].sort((a, b) => Number(running.has(b.hostname)) - Number(running.has(a.hostname)) || a.hostname.localeCompare(b.hostname));
-  let remaining = wanted;
-  // First pass: one per host, preferring hosts already running the service.
-  for (const n of ordered) {
-    if (remaining <= 0) break;
-    placement.set(n.hostname, 1);
-    remaining -= 1;
-  }
-  // Second pass: scale out round-robin within the per-node cap.
-  while (remaining > 0 && opts.scaleOut) {
-    let progressed = false;
-    for (const n of ordered) {
-      if (remaining <= 0) break;
-      const cur = placement.get(n.hostname) ?? 0;
-      if (cur < perNodeCap) {
-        placement.set(n.hostname, cur + 1);
-        remaining -= 1;
-        progressed = true;
-      }
-    }
-    if (!progressed) break;
-  }
-  if (remaining > 0) {
-    notes.push(`${svc.name}: wanted ${wanted} replicas but rendered ${wanted - remaining} (one per eligible host; pass --scale-out for numbered instances)`);
-  }
-  return placement;
-}
-
-// ---------- unit rendering helpers ----------
-
-function q(value: string): string {
-  if (value === "") return '""';
-  if (!/[\s"'\\]/.test(value)) return value;
-  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
-}
-
-class Unit {
-  private sections = new Map<string, string[]>();
-  constructor(private header: string[]) {}
-  add(section: string, key: string, value: string | number | boolean | null | undefined): void {
-    if (value === null || value === undefined || value === "") return;
-    const list = this.sections.get(section) ?? [];
-    list.push(`${key}=${String(value)}`);
-    this.sections.set(section, list);
-  }
-  render(order: string[]): string {
-    const out = this.header.map((l) => `# ${l}`);
-    for (const s of order) {
-      const lines = this.sections.get(s);
-      if (!lines || lines.length === 0) continue;
-      out.push("", `[${s}]`, ...lines);
-    }
-    return out.join("\n") + "\n";
-  }
-}
-
-function cpuQuota(nanoCpus: number | null): string | null {
-  if (!nanoCpus) return null;
-  return `${Math.round(nanoCpus / 10_000_000)}%`;
-}
+const q = quote;
+const Unit = UnitFile;
 
 /** Docker stores extra hosts as "IP hostname"; Podman's AddHost= wants "hostname:IP". */
 export function addHost(entry: string): string {
@@ -180,22 +60,11 @@ export function addHost(entry: string): string {
   return entry.replace(/\s+/, ":");
 }
 
-function octal(mode: number): string {
-  return "0" + mode.toString(8);
-}
-
 function unitNameFor(svc: Service, instance: number, total: number): string {
   return total > 1 ? `${svc.name}-${instance}` : svc.name;
 }
 
-function healthCmd(test: string[]): string | null {
-  if (test.length === 0) return null;
-  const [kind, ...rest] = test;
-  if (kind === "NONE") return null;
-  if (kind === "CMD-SHELL") return rest.join(" ");
-  if (kind === "CMD") return rest.map(q).join(" ");
-  return test.map(q).join(" ");
-}
+const healthCmd = healthCommand;
 
 // ---------- main renderer ----------
 
