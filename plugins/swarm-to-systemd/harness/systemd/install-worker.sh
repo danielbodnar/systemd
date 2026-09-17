@@ -49,7 +49,9 @@ if [ -d "$source_dir/../skills" ]; then
     rm -rf "$prefix/skills"
     cp -a "$source_dir/../skills" "$prefix/skills"
 fi
-(cd "$prefix/harness" && "$bun_bin" install --frozen-lockfile --production 2>/dev/null || "$bun_bin" install --production)
+# The lockfile is the single source of truth for what runs here: a mismatch
+# fails the install rather than resolving fresh from the registry.
+(cd "$prefix/harness" && "$bun_bin" install --frozen-lockfile --production)
 
 [ -f /etc/swarm-agent/swarm-agent.yaml ] || install -m 0640 -g swarm-agent "$source_dir/swarm-agent.yaml" /etc/swarm-agent/swarm-agent.yaml
 [ -f /etc/swarm-agent/approvals.yaml ] || install -m 0640 -g swarm-agent "$source_dir/approvals.yaml" /etc/swarm-agent/approvals.yaml
