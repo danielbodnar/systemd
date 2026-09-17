@@ -8,7 +8,7 @@
         "ContainerSpec": {
           "Image": "registry.example.com/acme/app:2026.09@sha256:0000000000000000000000000000000000000000000000000000000000000002",
           "Args": ["serve", "--port", "8080"],
-          "Env": ["DATABASE_URL=postgres://app@data_postgres:5432/app", "APP_SECRET_KEY=hunter2", "LOG_LEVEL=info"],
+          "Env": ["DATABASE_URL=postgres://app@data_postgres:5432/app", "APP_SECRET_KEY=fixture-placeholder-not-a-secret", "LOG_LEVEL=info"],
           "Hosts": ["10.0.9.9 legacy.internal"],
           "User": "1000:1000",
           "Dir": "/srv/app",

@@ -49,7 +49,7 @@ describe("normalize", () => {
   });
   test("keeps env values when asked", () => {
     const kept = normalize(capture, { keepEnvValues: true });
-    expect(kept.services.find((s) => s.name === "web_app")?.env.APP_SECRET_KEY).toBe("hunter2");
+    expect(kept.services.find((s) => s.name === "web_app")?.env.APP_SECRET_KEY).toBe("fixture-placeholder-not-a-secret");
   });
 });
 

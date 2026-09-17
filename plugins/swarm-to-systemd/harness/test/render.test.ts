@@ -57,7 +57,7 @@ describe("render", () => {
     expect(app).toContain("Image=registry.example.com/acme/app:2026.09");
     expect(app).toContain("Exec=serve --port 8080");
     expect(app).toContain("Secret=web_app-app-secret-key,type=env,target=APP_SECRET_KEY");
-    expect(app).not.toContain("hunter2");
+    expect(app).not.toContain("fixture-placeholder-not-a-secret");
     expect(app).toContain("Secret=web_app_signing_key,type=mount,target=signing_key,uid=1000,gid=1000,mode=0400");
     expect(app).toContain("HealthCmd=curl -fsS http://localhost:8080/healthz || exit 1");
     expect(app).toContain("Notify=healthy");
@@ -84,7 +84,7 @@ describe("render", () => {
     const script = result.files["hosts/swarm-wrk-1/secrets/import-secrets.sh"];
     expect(script).toContain("'data_pg_password'");
     expect(script).toContain("podman secret create --replace");
-    expect(script).not.toContain("hunter2");
+    expect(script).not.toContain("fixture-placeholder-not-a-secret");
   });
   test("notes call out the decisions", () => {
     expect(result.notes.some((n) => n.includes("ingress-mode ports"))).toBe(true);

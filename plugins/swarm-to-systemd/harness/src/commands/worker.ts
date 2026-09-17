@@ -27,6 +27,10 @@ export function resolveEnvironmentId(cfg: Config): string {
 
 export async function worker(cfg: Config, opts: { once?: boolean }): Promise<number> {
   const environmentKey = readCredential("environment-key", "ANTHROPIC_ENVIRONMENT_KEY");
+  // Tool processes inherit this environment; drop the pointers to the key so
+  // a bash call cannot find it by name (the denied_paths guard covers the path).
+  delete process.env.CREDENTIALS_DIRECTORY;
+  delete process.env.ANTHROPIC_ENVIRONMENT_KEY;
   if (!environmentKey) {
     console.error("no environment key: provide it as the systemd credential `environment-key` or ANTHROPIC_ENVIRONMENT_KEY");
     return 2;

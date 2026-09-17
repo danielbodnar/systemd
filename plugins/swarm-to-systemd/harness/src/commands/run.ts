@@ -4,7 +4,7 @@ import { hostname } from "node:os";
 import { loadPolicy } from "../approvals.ts";
 import type { Config } from "../config.ts";
 import { resolveFrom } from "../config.ts";
-import { readLockfile, resolveResource } from "../lock.ts";
+import { environmentType, readLockfile, resolveResource } from "../lock.ts";
 import { runSession } from "../session.ts";
 import { TASKS } from "../tasks.ts";
 
@@ -35,7 +35,8 @@ export async function run(cfg: Config, args: RunArgs): Promise<number> {
   const lock = readLockfile(lockfile);
   const agentPath = args.agent ?? task?.agent ?? cfg.session.agent;
   const agent = resolveResource(lock, lockfile, agentPath, "agent");
-  const environment = resolveResource(lock, lockfile, args.environment ?? cfg.session.environment, "environment");
+  const environmentPath = args.environment ?? cfg.session.environment;
+  const environment = resolveResource(lock, lockfile, environmentPath, "environment");
   const memory = !args.noMemory && cfg.session.memory_store
     ? resolveResource(lock, lockfile, cfg.session.memory_store, "memory_store")
     : undefined;
@@ -43,7 +44,15 @@ export async function run(cfg: Config, args: RunArgs): Promise<number> {
   const workspace = lock.origin?.workspace_id ?? cfg.workspace;
 
   if (args.approveAll) {
-    console.error("warning: --approve-all answers every tool ask with allow; use it only against a lab environment");
+    // The switch is a lab convenience. A self-hosted environment executes tools
+    // on a real host, so it is refused there outright, and an environment whose
+    // definition cannot be read is treated the same way.
+    const type = environmentType(lockfile, environmentPath);
+    if (type !== "cloud") {
+      console.error(`--approve-all is refused for ${environmentPath}: only cloud lab environments accept it (config.type is ${type ?? "unreadable"})`);
+      return 2;
+    }
+    console.error("warning: --approve-all answers every tool ask with allow on this cloud lab environment");
   }
 
   const result = await runSession({

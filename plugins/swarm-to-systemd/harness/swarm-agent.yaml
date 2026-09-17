@@ -12,7 +12,11 @@ workspace: default
 worker:
   # Where the agent's bash and file tools operate on the production host.
   workdir: /var/lib/swarm-agent/workspace
-  # Extra directories the file tools may read; bash is not confined by this.
+  # Extra directories the file tools may read. Bash is not scoped by this
+  # list; its boundary is the worker unit: ProtectSystem=strict makes the
+  # host read-only except workdir and /mnt/memory, InaccessiblePaths= hides
+  # the secret directories, and the process runs unprivileged with no
+  # capabilities. The approval policy is a second layer, not the boundary.
   allowed_roots:
     - /etc/containers/systemd
     - /etc/systemd/system

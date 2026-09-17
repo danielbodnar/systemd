@@ -6,6 +6,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
+import { parse as parseYaml } from "yaml";
 
 export interface LockResource {
   kind: string;
@@ -45,4 +46,16 @@ export function resolveResource(lock: Lockfile, lockfilePath: string, resourcePa
   }
   if (expectedKind && res.kind !== expectedKind) throw new Error(`${key} is a ${res.kind}, expected ${expectedKind}`);
   return res;
+}
+
+// Reads `config.type` from an environment definition file so callers can tell
+// a cloud lab from a self-hosted production host before relaxing anything.
+export function environmentType(lockfilePath: string, resourcePath: string): string | undefined {
+  const file = resolve(dirname(lockfilePath), resourcePath);
+  try {
+    const doc = parseYaml(readFileSync(file, "utf8")) as { config?: { type?: unknown } } | null;
+    return typeof doc?.config?.type === "string" ? doc.config.type : undefined;
+  } catch {
+    return undefined;
+  }
 }

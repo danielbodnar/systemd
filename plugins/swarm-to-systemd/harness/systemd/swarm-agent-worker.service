@@ -45,6 +45,9 @@ NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
 ReadWritePaths=/var/lib/swarm-agent /mnt/memory
+# Bash runs inside this sandbox too: the host is read-only apart from the two
+# paths above, and the secret directories do not exist from its point of view.
+InaccessiblePaths=-/etc/swarm-migration/secrets -/etc/credstore -/etc/credstore.encrypted
 PrivateTmp=yes
 PrivateDevices=yes
 ProtectKernelTunables=yes
