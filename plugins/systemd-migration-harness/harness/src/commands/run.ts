@@ -65,6 +65,7 @@ export async function run(cfg: Config, args: RunArgs): Promise<number> {
     rubric: args.noRubric || args.message ? undefined : task?.rubric,
     maxIterations: task?.max_iterations,
     memoryStoreId: memory?.id,
+    memoryAccess: task?.memory_access ?? "read_only",
     budgetCents: args.budgetCents ?? cfg.session.budget_cents,
     policy,
     interactive: !args.nonInteractive,

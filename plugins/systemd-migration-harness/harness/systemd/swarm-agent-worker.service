@@ -37,6 +37,9 @@ Type=notify
 NotifyAccess=all
 User=swarm-agent
 Group=swarm-agent
+# Membership of swarm-agent-ipc is what admits the worker to the executor's
+# socket and lets it read the per-start token it must present.
+SupplementaryGroups=swarm-agent-ipc
 Slice=swarm-agent.slice
 WorkingDirectory=/opt/swarm-agent/harness
 ExecStart=/usr/local/bin/bun run src/cli.ts worker --config /etc/swarm-agent/swarm-agent.yaml

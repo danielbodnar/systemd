@@ -25,7 +25,11 @@ StartLimitBurst=5
 Type=notify
 NotifyAccess=all
 User=swarm-agent-tools
-Group=swarm-agent
+# The primary group owns the runtime directory, the socket, and the token
+# file; only the worker is a member besides the executor itself. The shared
+# workspace group is supplementary (its setgid bit keeps files in it).
+Group=swarm-agent-ipc
+SupplementaryGroups=swarm-agent
 Slice=swarm-agent.slice
 WorkingDirectory=/opt/swarm-agent/harness
 ExecStart=/usr/local/bin/bun run src/cli.ts tools --config /etc/swarm-agent/swarm-agent.yaml

@@ -37,7 +37,10 @@ command -v systemd-creds >/dev/null || { echo "systemd-creds not available" >&2;
 echo "installing harness from $source_dir to $prefix/harness"
 install -m 0644 "$source_dir/systemd/swarm-agent.sysusers.conf" /etc/sysusers.d/swarm-agent.conf
 systemd-sysusers /etc/sysusers.d/swarm-agent.conf
-install -d -m 0755 "$prefix" /etc/swarm-agent /etc/credstore.encrypted
+install -d -m 0755 "$prefix" /etc/swarm-agent
+# The credential store is private to root, as systemd's own tmpfiles.d
+# credstore.conf ships it; never widen it for the sake of this harness.
+install -d -m 0700 /etc/credstore.encrypted
 install -d -m 0750 -o swarm-agent -g swarm-agent /var/lib/swarm-agent
 # The workspace and memory mounts are shared between the worker and the tool
 # executor through the group; setgid keeps new files in that group.
@@ -80,6 +83,7 @@ if [ ! -f /etc/credstore.encrypted/swarm-agent.environment-key ]; then
     [ -n "$key" ] || { echo "empty key" >&2; exit 1; }
     printf '%s' "$key" | systemd-creds encrypt --name=environment-key - /etc/credstore.encrypted/swarm-agent.environment-key
     unset key
+    chmod 0600 /etc/credstore.encrypted/swarm-agent.environment-key
     echo "environment key stored encrypted"
 fi
 

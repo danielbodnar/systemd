@@ -12,12 +12,15 @@ export interface Task {
   message: string;
   rubric?: string;
   max_iterations?: number;
+  /** Access to the shared journal; only the auditor appends, everything else reads. */
+  memory_access?: "read_only" | "read_write";
 }
 
 export const TASKS: Record<string, Task> = {
   capture: {
     name: "capture",
     agent: "./agents/swarm-auditor.md",
+    memory_access: "read_write",
     title: "Capture swarm inventory",
     message:
       "Capture the Docker Swarm cluster reachable from this host into ./capture and normalize it to ./inventory.json in the workspace. Report counts, warnings, and migration risks.",

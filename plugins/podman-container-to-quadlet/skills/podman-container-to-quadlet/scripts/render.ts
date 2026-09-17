@@ -16,7 +16,7 @@ import { dirname, join } from "node:path";
 import type { Inventory, Service } from "../../../contract/types.ts";
 import { durationToSeconds } from "../../../contract/types.ts";
 import { nodeMatchesPlatform, nodeSatisfies, parseConstraint, placeService } from "../../../contract/placement.ts";
-import { UnitFile, cpuQuota, healthCommand, octal, quote } from "../../../contract/unit.ts";
+import { UnitFile, cpuQuota, healthCommand, isPlainName, isPlainPath, octal, quote, shellQuote } from "../../../contract/unit.ts";
 
 export { nodeMatchesPlatform, nodeSatisfies, parseConstraint, placeService };
 
@@ -71,6 +71,12 @@ const healthCmd = healthCommand;
 export function render(inv: Inventory, opts: RenderOptions): RenderResult {
   const unitDir = opts.unitDir ?? "/etc/containers/systemd";
   const configDir = opts.configDir ?? "/etc/containers/swarm-configs";
+  // These paths and names are written into install.sh, which an operator runs as root.
+  for (const [flag, dir] of [["--unit-dir", unitDir], ["--config-dir", configDir]] as const) {
+    if (!isPlainPath(dir)) throw new Error(`${flag} must be an absolute path of plain characters, got ${JSON.stringify(dir)}`);
+  }
+  for (const s of inv.services) if (!isPlainName(s.name)) throw new Error(`service name ${JSON.stringify(s.name)} cannot be used in unit and script names`);
+  for (const n of inv.nodes) if (!isPlainName(n.hostname)) throw new Error(`hostname ${JSON.stringify(n.hostname)} cannot be used in script paths`);
   const files: Record<string, string | Uint8Array> = {};
   const configManifest = new Map<string, string[]>(); // host -> "name uid gid mode" lines
   const hosts: Record<string, HostPlan> = {};
@@ -357,7 +363,12 @@ exit $missing
 `;
 }
 
-function installScript(plan: HostPlan, unitDir: string, configDir: string): string {
+function installScript(plan: HostPlan, unitDirRaw: string, configDirRaw: string): string {
+  // Every value from options or the inventory is shell-quoted; the paths were validated in render().
+  const unitDir = shellQuote(unitDirRaw);
+  const configDir = shellQuote(configDirRaw);
+  const units = plan.units.map(shellQuote).join(" ");
+  const targets = plan.targets.map(shellQuote).join(" ");
   return `#!/usr/bin/env bash
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Install the rendered Quadlet units for ${plan.hostname}. Run as root on that host.
@@ -366,27 +377,27 @@ set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 start=0
 [ "\${1:-}" = "--start" ] && start=1
-install -d -m 0755 "${unitDir}" "${configDir}" /etc/systemd/system
+install -d -m 0755 ${unitDir} ${configDir} /etc/systemd/system
 if [ -d "$here/etc/containers/swarm-configs" ]; then
-    find "$here/etc/containers/swarm-configs" -maxdepth 1 -type f ! -name .manifest -exec install -m 0644 {} "${configDir}/" \\;
+    find "$here/etc/containers/swarm-configs" -maxdepth 1 -type f ! -name .manifest -exec install -m 0644 {} ${configDir}/ \\;
 fi
-install -m 0644 "$here${unitDir}/"* "${unitDir}/"
+install -m 0644 "$here"${unitDir}/* ${unitDir}/
 if ls "$here/etc/systemd/system/"*.target >/dev/null 2>&1; then
     install -m 0644 "$here/etc/systemd/system/"*.target /etc/systemd/system/
 fi
 if [ -f "$here/etc/containers/swarm-configs/.manifest" ]; then
     while read -r name uid gid mode; do
         [ -n "$name" ] || continue
-        chown "$uid:$gid" "${configDir}/$name" && chmod "$mode" "${configDir}/$name"
+        chown "$uid:$gid" ${configDir}/"$name" && chmod "$mode" ${configDir}/"$name"
     done < "$here/etc/containers/swarm-configs/.manifest"
 fi
 systemctl daemon-reload
-if ! systemd-analyze verify ${plan.units.join(" ")}; then
+if ! systemd-analyze verify ${units}; then
     echo "systemd-analyze verify failed; units are installed but not started. Fix the rendered tree and re-run." >&2
     exit 1
 fi
 if [ "$start" -eq 1 ]; then
-    systemctl enable --now ${plan.targets.join(" ")} ${plan.units.join(" ")}
+    systemctl enable --now ${targets} ${units}
 fi
 echo "installed ${plan.units.length} units on $(hostname)"
 `;

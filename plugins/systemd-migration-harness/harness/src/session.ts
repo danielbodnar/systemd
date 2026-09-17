@@ -25,6 +25,8 @@ export interface RunOptions {
   rubric?: string;
   maxIterations?: number;
   memoryStoreId?: string;
+  /** Defaults to read_only: a session that only consumes the journal cannot write into the context of later ones. */
+  memoryAccess?: "read_only" | "read_write";
   budgetCents?: string;
   policy: Policy;
   interactive: boolean;
@@ -71,7 +73,7 @@ export async function runSession(opts: RunOptions): Promise<RunResult> {
     environment_id: opts.environmentId,
     title: opts.title,
     ...(opts.memoryStoreId
-      ? { resources: [{ type: "memory_store" as const, memory_store_id: opts.memoryStoreId, access: "read_write" as const }] }
+      ? { resources: [{ type: "memory_store" as const, memory_store_id: opts.memoryStoreId, access: opts.memoryAccess ?? ("read_only" as const) }] }
       : {}),
     ...(opts.budgetCents ? { budget: { type: "limit" as const, max_list_cost: { amount: opts.budgetCents, currency: "USD" } } } : {}),
     metadata: { harness: "systemd-migration-harness", ...opts.metadata },

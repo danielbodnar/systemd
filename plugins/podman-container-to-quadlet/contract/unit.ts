@@ -89,6 +89,21 @@ export class UnitFile {
   }
 }
 
+/** Quote a value for a POSIX shell script so it is inert whatever it contains. */
+export function shellQuote(value: string): string {
+  return "'" + value.replace(/'/g, "'\\''") + "'";
+}
+
+/** Whether a value can be embedded in a rendered script or unit name without quoting surprises. */
+export function isPlainName(value: string): boolean {
+  return /^[A-Za-z0-9._-]+$/.test(value);
+}
+
+/** Whether an installation directory is an absolute path made of plain characters. */
+export function isPlainPath(value: string): boolean {
+  return /^\/[A-Za-z0-9._\/-]+$/.test(value) && !value.includes("/..") && !value.includes("//");
+}
+
 /** Escape a path the way systemd-escape --path does, for mount unit names. */
 export function escapeUnitPath(path: string): string {
   let p = path.replace(/\/+/g, "/").replace(/^\/+/, "").replace(/\/+$/, "");

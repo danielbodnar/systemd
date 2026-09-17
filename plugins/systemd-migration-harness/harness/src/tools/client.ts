@@ -7,6 +7,7 @@
 
 import { betaAgentToolset20260401, type AgentToolContext } from "@anthropic-ai/sdk/tools/agent-toolset/node";
 import type { BetaRunnableTool, BetaToolRunContext } from "@anthropic-ai/sdk/lib/tools/BetaRunnableTool";
+import { readFileSync } from "node:fs";
 import { createConnection, type Socket } from "node:net";
 import { encode, LineDecoder, ResponseSchema, type WireToolContext } from "./protocol.ts";
 
@@ -23,12 +24,12 @@ export class RemoteToolset {
   private nextId = 1;
   private closed = false;
 
-  constructor(socketPath: string, ctx: WireToolContext) {
+  constructor(socketPath: string, ctx: WireToolContext, token?: string) {
     const decoder = new LineDecoder();
     this.socket = createConnection(socketPath);
     this.socket.setEncoding("utf8");
     this.ready = new Promise<void>((resolve, reject) => {
-      this.socket.once("connect", () => this.socket.write(encode({ type: "hello", ctx })));
+      this.socket.once("connect", () => this.socket.write(encode({ type: "hello", ctx, token: token ?? readToken(socketPath) })));
       this.socket.once("error", (err) => {
         reject(new Error(`tool executor unreachable at ${socketPath}: ${err.message}`));
         this.failAll(err);
@@ -84,14 +85,23 @@ export class RemoteToolset {
   }
 }
 
+/** The executor writes its per-start token next to the socket, readable by its group only. */
+export function readToken(socketPath: string): string | undefined {
+  try {
+    return readFileSync(`${socketPath}.token`, "utf8").trim();
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Build the proxy tools for one session. The factory is synchronous because
  * the environment worker calls it that way; the connection finishes
  * establishing before the first call is forwarded.
  */
-export function remoteTools(socketPath: string, ctx: AgentToolContext): BetaRunnableTool[] {
+export function remoteTools(socketPath: string, ctx: AgentToolContext, token?: string): BetaRunnableTool[] {
   const wire: WireToolContext = { workdir: ctx.workdir, allowedRoots: ctx.allowedRoots ?? [], readOnlyRoots: ctx.readOnlyRoots ?? [] };
-  const remote = new RemoteToolset(socketPath, wire);
+  const remote = new RemoteToolset(socketPath, wire, token);
   const local = betaAgentToolset20260401(ctx);
   const proxies = local.map((tool) => ({
     ...tool,

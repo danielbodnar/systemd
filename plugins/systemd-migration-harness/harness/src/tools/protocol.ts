@@ -16,7 +16,9 @@ export const ToolContextSchema = z.object({
 export type WireToolContext = z.infer<typeof ToolContextSchema>;
 
 export const RequestSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("hello"), ctx: ToolContextSchema }),
+  // token: the executor's per-start secret, read by the worker from the file
+  // next to the socket; a hello without the right one ends the connection.
+  z.object({ type: z.literal("hello"), ctx: ToolContextSchema, token: z.string().optional() }),
   z.object({ type: z.literal("call"), id: z.number().int(), tool: z.string().min(1), input: z.unknown(), toolUse: z.unknown().optional() }),
   z.object({ type: z.literal("cancel"), id: z.number().int() }),
 ]);

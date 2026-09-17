@@ -130,8 +130,8 @@ describe("review fixes", () => {
     expect(payload).toBeInstanceOf(Uint8Array);
     expect(r.files["hosts/swarm-mgr-1/etc/containers/swarm-configs/.manifest"]).toBe("web_caddyfile 0 0 0444\n");
     const install = r.files["hosts/swarm-mgr-1/install.sh"] as string;
-    expect(install).toContain('chown "$uid:$gid" "/etc/containers/swarm-configs/$name"');
-    expect(install).toContain('-exec install -m 0644 {} "/etc/containers/swarm-configs/" \\;');
+    expect(install).toContain("chown \"$uid:$gid\" '/etc/containers/swarm-configs'/\"$name\"");
+    expect(install).toContain("-exec install -m 0644 {} '/etc/containers/swarm-configs'/ \\;");
     expect(install).toMatch(/if ! systemd-analyze verify[\s\S]*exit 1[\s\S]*if \[ "\$start" -eq 1 \]/);
   });
   test("a mount naming an uninventoried volume with driver options gets a synthesized .volume", () => {
@@ -147,5 +147,23 @@ describe("review fixes", () => {
     const script = render(inv, { outDir: "unused" }).files["hosts/swarm-wrk-1/secrets/import-secrets.sh"] as string;
     expect(script).toContain("SWARM_SECRETS_DIR:-/etc/swarm-migration/secrets");
     expect(script).not.toContain("secrets/values");
+  });
+});
+
+describe("install scripts are inert to hostile values", () => {
+  test("directories with shell syntax are rejected before anything is rendered", () => {
+    expect(() => render(inv, { outDir: "unused", unitDir: "/etc/$(id)" })).toThrow(/--unit-dir/);
+    expect(() => render(inv, { outDir: "unused", configDir: "relative/path" })).toThrow(/--config-dir/);
+    expect(() => render(inv, { outDir: "unused", unitDir: "/etc/../x" })).toThrow(/--unit-dir/);
+  });
+  test("a hostile service name is rejected", () => {
+    const hostile = JSON.parse(JSON.stringify(inv)) as typeof inv;
+    hostile.services[0]!.name = "web;rm -rf /";
+    expect(() => render(hostile, { outDir: "unused" })).toThrow(/service name/);
+  });
+  test("every value in the script is single-quoted", () => {
+    const install = render(inv, { outDir: "unused", unitDir: "/srv/quadlet-units" }).files["hosts/swarm-mgr-1/install.sh"] as string;
+    expect(install).toContain("'/srv/quadlet-units'");
+    expect(install).not.toMatch(/\$\{unitDir\}|\$\{configDir\}/);
   });
 });

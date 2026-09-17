@@ -57,9 +57,13 @@ rules:
     match: '^\s*docker\s+(info|version|(node|service|stack|network|volume|secret|config|plugin)\s+(ls|inspect|ps))\b'
     decision: allow
     reason: read-only docker query
-  # The capture, normalize, render, and verify scripts from the plugin skills.
+  # The plugin skills' scripts, invoked directly: an interpreter, a path made of
+  # plain characters that ends in one of the script names, and plain-character
+  # arguments. Anything else around the script name (a shell wrapper, quotes,
+  # substitutions, a script name inside another command's arguments) does not
+  # match and falls through to the operator.
   - tool: bash
-    match: '(capture\.sh|normalize\.ts|render\.ts|verify\.sh)\b'
+    match: '^\s*(bash|bun)\s+(\.?\.?/[A-Za-z0-9._/-]+/|[A-Za-z0-9._-]+/)*(capture\.sh|normalize\.ts|render\.ts|verify\.sh|plan-map\.ts|build-catalog\.ts|pull-images\.sh)(\s+[A-Za-z0-9._/=:,@%+-]+)*\s*$'
     decision: allow
     reason: plugin script
   # Common read-only shell tools.

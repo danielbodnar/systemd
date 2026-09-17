@@ -50,3 +50,28 @@ describe("tool executor round trip", () => {
     await expect(read.run(read.parse({ file_path: "hello.txt" }))).rejects.toThrow(/unreachable/);
   });
 });
+
+describe("executor peer authentication", () => {
+  test("the executor writes a per-start token next to the socket and the worker presents it", async () => {
+    const { readFileSync, statSync } = await import("node:fs");
+    const token = readFileSync(`${socketPath}.token`, "utf8").trim();
+    expect(token).toMatch(/^[0-9a-f]{64}$/);
+    expect(statSync(`${socketPath}.token`).mode & 0o777).toBe(0o640);
+    const tools = remoteTools(socketPath, { workdir }, token);
+    const read = tools.find((t) => t.name === "read")!;
+    expect(JSON.stringify(await read.run(read.parse({ file_path: "hello.txt" })))).toContain("hi from the workspace");
+    await tools[0].close?.();
+  });
+  test("a peer without the token is refused before any tool runs", async () => {
+    const tools = remoteTools(socketPath, { workdir }, "");
+    const read = tools.find((t) => t.name === "read")!;
+    await expect(read.run(read.parse({ file_path: "hello.txt" }))).rejects.toThrow(/hello rejected/);
+    await tools[0].close?.();
+  });
+  test("a peer with a wrong token is refused", async () => {
+    const tools = remoteTools(socketPath, { workdir }, "0".repeat(64));
+    const bash = tools.find((t) => t.name === "bash")!;
+    await expect(bash.run(bash.parse({ command: "echo should-not-run" }))).rejects.toThrow(/hello rejected/);
+    await tools[0].close?.();
+  });
+});

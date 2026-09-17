@@ -19,7 +19,7 @@ import { dirname, join } from "node:path";
 import type { ImageConfig, Inventory, Service, Volume } from "../../../contract/types.ts";
 import { durationToSeconds } from "../../../contract/types.ts";
 import { placeService } from "../../../contract/placement.ts";
-import { UnitFile, bytes, cpuQuota, escapeUnitPath, healthCommand, imageName, octal, quote, unitBaseName } from "../../../contract/unit.ts";
+import { UnitFile, bytes, cpuQuota, escapeUnitPath, healthCommand, imageName, isPlainName, isPlainPath, octal, quote, shellQuote, unitBaseName } from "../../../contract/unit.ts";
 
 export interface RenderOptions {
   hostMap?: Record<string, string[]>;
@@ -151,6 +151,15 @@ function nfsWhat(v: Volume): { what: string; type: string; options: string } | n
 export function render(inv: Inventory, opts: RenderOptions = {}): RenderResult {
   const imageDir = (opts.imageDir ?? "/var/lib/machines").replace(/\/+$/, "");
   const stateDir = (opts.stateDir ?? "/var/lib").replace(/\/+$/, "");
+  // Paths, host names, and service names end up in unit names and in install.sh, which runs as root.
+  for (const [flag, dir] of [["--image-dir", imageDir], ["--state-dir", stateDir]] as const) {
+    if (!isPlainPath(dir)) throw new Error(`${flag} must be an absolute path of plain characters, got ${JSON.stringify(dir)}`);
+  }
+  for (const s of inv.services) if (!isPlainName(s.name)) throw new Error(`service name ${JSON.stringify(s.name)} cannot be used in unit and script names`);
+  for (const n of inv.nodes) if (!isPlainName(n.hostname)) throw new Error(`hostname ${JSON.stringify(n.hostname)} cannot be used in script paths`);
+  for (const v of inv.volumes) if (!isPlainName(v.name)) throw new Error(`volume name ${JSON.stringify(v.name)} cannot be used in paths`);
+  for (const c of inv.configs) if (!isPlainName(c.name)) throw new Error(`config name ${JSON.stringify(c.name)} cannot be used in paths`);
+  for (const s of inv.secrets) if (!isPlainName(s.name)) throw new Error(`secret name ${JSON.stringify(s.name)} cannot be used as a credential name`);
   const files: Record<string, string> = {};
   const hosts: Record<string, HostPlan> = {};
   const images: Record<string, ImageEntry> = {};
@@ -533,7 +542,7 @@ function importScript(names: string[]): string {
     '[ "$(id -u)" -eq 0 ] || { echo "run as root" >&2; exit 1; }',
     'install -d -m 0700 "$dst"',
     "missing=0",
-    `for name in ${names.map(quote).join(" ")}; do`,
+    `for name in ${names.map(shellQuote).join(" ")}; do`,
     '    if [ ! -f "$src/$name" ]; then echo "missing $src/$name" >&2; missing=$((missing + 1)); continue; fi',
     '    systemd-creds encrypt --name="$name" "$src/$name" "$dst/$name"',
     '    chmod 0600 "$dst/$name"',
@@ -555,21 +564,21 @@ function installScript(plan: HostPlan, cfgManifest: string[], stacks: string[]):
     "set -euo pipefail",
     'here="$(cd "$(dirname "$0")" && pwd)"',
     '[ "$(id -u)" -eq 0 ] || { echo "run as root" >&2; exit 1; }',
-    `[ "$(hostname)" = ${quote(plan.hostname)} ] || echo "warning: this tree was rendered for ${plan.hostname}, not $(hostname)" >&2`,
-    'for image in ' + plan.images.map(quote).join(" ") + "; do",
+    `[ "$(hostname)" = ${shellQuote(plan.hostname)} ] || echo "warning: this tree was rendered for ${plan.hostname}, not $(hostname)" >&2`,
+    "for image in " + plan.images.map(shellQuote).join(" ") + "; do",
     '    [ -e "$image" ] || echo "warning: $image is not present; run pull-images.sh" >&2',
     "done",
     'cp -a "$here/etc/." /etc/',
     ...(cfgManifest.length
       ? ["while read -r path uid gid mode; do", '    chown "$uid:$gid" "/etc/$path"', '    chmod "$mode" "/etc/$path"', `done <<'MANIFEST'`, ...cfgManifest, "MANIFEST"]
       : []),
-    ...stacks.map((s) => `find /etc/${s} -maxdepth 1 -name '*.env' -exec chmod 0600 {} + 2>/dev/null || true`),
-    "systemd-tmpfiles --create " + stacks.map((s) => `/etc/tmpfiles.d/${s}.conf`).join(" ") + " || true",
+    ...stacks.map((s) => `find ${shellQuote(`/etc/${s}`)} -maxdepth 1 -name '*.env' -exec chmod 0600 {} + 2>/dev/null || true`),
+    "systemd-tmpfiles --create " + stacks.map((s) => shellQuote(`/etc/tmpfiles.d/${s}.conf`)).join(" ") + " || true",
     "sysctl --system >/dev/null || true",
     "systemctl daemon-reload",
-    `systemd-analyze verify ${[...plan.units, ...plan.timers, ...plan.mounts, ...plan.targets].map((u) => `/etc/systemd/system/${u}`).join(" ")}`,
+    `systemd-analyze verify ${[...plan.units, ...plan.timers, ...plan.mounts, ...plan.targets].map((u) => shellQuote(`/etc/systemd/system/${u}`)).join(" ")}`,
     'if [ "${1:-}" = "--start" ]; then',
-    `    systemctl enable --now ${plan.targets.join(" ")}`,
+    `    systemctl enable --now ${plan.targets.map(shellQuote).join(" ")}`,
     "else",
     `    echo "installed; start with: systemctl enable --now ${plan.targets.join(" ")}"`,
     "fi",

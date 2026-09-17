@@ -204,3 +204,22 @@ describe("capability and command helpers", () => {
     expect(notes).toEqual([]);
   });
 });
+
+describe("native install scripts are inert to hostile values", () => {
+  test("directories with shell syntax are rejected", () => {
+    expect(() => render(inv, { imageDir: "/var/lib/$(id)" })).toThrow(/--image-dir/);
+    expect(() => render(inv, { stateDir: "var/lib" })).toThrow(/--state-dir/);
+  });
+  test("a hostile hostname is rejected", () => {
+    const hostile = JSON.parse(JSON.stringify(inv)) as Inventory;
+    hostile.nodes[0]!.hostname = "mgr`id`";
+    expect(() => render(hostile)).toThrow(/hostname/);
+  });
+  test("the install script single-quotes every embedded path and name", () => {
+    const install = result.files["hosts/swarm-wrk-1/install.sh"]!;
+    expect(install).toContain("[ \"$(hostname)\" = 'swarm-wrk-1' ]");
+    expect(install).toContain("'/var/lib/machines/acme-app_2026.09.mstack'");
+    expect(install).toContain("systemd-analyze verify '/etc/systemd/system/");
+    expect(install).toContain("systemctl enable --now 'data.target' 'web.target'");
+  });
+});

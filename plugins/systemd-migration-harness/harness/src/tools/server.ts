@@ -8,7 +8,8 @@
 
 import { betaAgentToolset20260401, type AgentToolContext } from "@anthropic-ai/sdk/tools/agent-toolset/node";
 import type { BetaRunnableTool } from "@anthropic-ai/sdk/lib/tools/BetaRunnableTool";
-import { chmodSync, existsSync, unlinkSync } from "node:fs";
+import { randomBytes, timingSafeEqual } from "node:crypto";
+import { chmodSync, existsSync, unlinkSync, writeFileSync } from "node:fs";
 import { createServer, type Server, type Socket } from "node:net";
 import { guardTools } from "./guard.ts";
 import { encode, LineDecoder, RequestSchema, type Response } from "./protocol.ts";
@@ -18,6 +19,12 @@ export interface ToolServerOptions {
   deniedPatterns: string[];
   /** Socket file mode; the group is the executor's primary group. */
   mode?: number;
+  /**
+   * The secret a worker must present in its hello. When absent, a random one
+   * is generated per start and written to `<socketPath>.token` (mode 0640, so
+   * only the executor's group can read it); the worker reads it from there.
+   */
+  token?: string;
   signal?: AbortSignal;
   onListening?: () => void;
 }
@@ -31,7 +38,14 @@ function send(socket: Socket, message: Response): void {
   if (!socket.destroyed) socket.write(encode(message));
 }
 
-async function handleMessage(socket: Socket, state: ConnectionState, raw: unknown, denied: string[]): Promise<void> {
+function tokenMatches(presented: string | undefined, expected: string): boolean {
+  if (!presented) return false;
+  const a = Buffer.from(presented);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+async function handleMessage(socket: Socket, state: ConnectionState, raw: unknown, denied: string[], token: string): Promise<void> {
   const parsed = RequestSchema.safeParse(raw);
   if (!parsed.success) {
     send(socket, { type: "error", id: null, error: `malformed request: ${parsed.error.issues.map((i) => i.message).join("; ")}` });
@@ -41,6 +55,13 @@ async function handleMessage(socket: Socket, state: ConnectionState, raw: unknow
   if (msg.type === "hello") {
     if (state.tools) {
       send(socket, { type: "error", id: null, error: "hello already received on this connection" });
+      return;
+    }
+    // The socket's group is the only ACL a Unix socket has; the token proves the
+    // peer is the worker that could read the token file, not merely a group member.
+    if (!tokenMatches(msg.token, token)) {
+      send(socket, { type: "error", id: null, error: "hello rejected: missing or wrong executor token" });
+      socket.destroy();
       return;
     }
     const ctx: AgentToolContext = { workdir: msg.ctx.workdir, allowedRoots: msg.ctx.allowedRoots, readOnlyRoots: msg.ctx.readOnlyRoots };
@@ -75,7 +96,7 @@ async function handleMessage(socket: Socket, state: ConnectionState, raw: unknow
   }
 }
 
-function handleConnection(socket: Socket, denied: string[]): void {
+function handleConnection(socket: Socket, denied: string[], token: string): void {
   const state: ConnectionState = { tools: null, inflight: new Map() };
   const decoder = new LineDecoder();
   let chain: Promise<void> = Promise.resolve();
@@ -91,9 +112,9 @@ function handleConnection(socket: Socket, denied: string[]): void {
     for (const m of messages) {
       // Cancels must not wait behind the call they cancel; everything else runs in order.
       if (typeof m === "object" && m !== null && (m as { type?: unknown }).type === "cancel") {
-        void handleMessage(socket, state, m, denied);
+        void handleMessage(socket, state, m, denied, token);
       } else {
-        chain = chain.then(() => handleMessage(socket, state, m, denied));
+        chain = chain.then(() => handleMessage(socket, state, m, denied, token));
       }
     }
   });
@@ -116,11 +137,14 @@ function handleConnection(socket: Socket, denied: string[]): void {
 export function serveTools(opts: ToolServerOptions): Promise<void> {
   return new Promise((resolve, reject) => {
     if (existsSync(opts.socketPath)) unlinkSync(opts.socketPath);
+    const tokenPath = `${opts.socketPath}.token`;
+    const token = opts.token ?? randomBytes(32).toString("hex");
+    if (!opts.token) writeFileSync(tokenPath, token + "\n", { mode: 0o640 });
     const open = new Set<Socket>();
     const server: Server = createServer((socket) => {
       open.add(socket);
       socket.once("close", () => open.delete(socket));
-      handleConnection(socket, opts.deniedPatterns);
+      handleConnection(socket, opts.deniedPatterns, token);
     });
     server.on("error", reject);
     server.listen(opts.socketPath, () => {
@@ -132,6 +156,7 @@ export function serveTools(opts: ToolServerOptions): Promise<void> {
       for (const s of open) s.destroy();
       server.close(() => {
         if (existsSync(opts.socketPath)) unlinkSync(opts.socketPath);
+        if (!opts.token && existsSync(tokenPath)) unlinkSync(tokenPath);
         resolve();
       });
     };
