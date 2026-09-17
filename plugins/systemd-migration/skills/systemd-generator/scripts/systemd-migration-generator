@@ -1,0 +1,311 @@
+#!/bin/sh
+# SPDX-License-Identifier: LGPL-2.1-or-later
+#
+# systemd-migration-generator: a systemd.generator(7) that turns the stack
+# descriptions the systemd-migration plugin installs under
+# /etc/systemd-migration/stacks.d/ into the grouping units the plugin would
+# otherwise render as files: <stack>.target with a Wants= line per unit of the
+# stack, stack-<stack>.slice with the accounting the estate chose, and the
+# <target>.wants/<stack>.target symlink that pulls the stack into the boot.
+# The service manager runs it on every boot and on every daemon-reload, so
+# the host carries no static grouping units and an operator edits the
+# description instead of re-rendering.
+#
+# Description format: one <stack>.conf per stack, ini-like, one [Stack] section.
+#
+#   [Stack]
+#   Name=web                                  the stack; emits web.target (required)
+#   Description=stack web                     Description= of the target (default "stack <Name>")
+#   Units=web_app.service web_app-health.timer
+#                                             space separated; each becomes Wants= on the target
+#   Slice=stack-web.slice                     the slice to emit (default stack-<Name>.slice)
+#   Accounting=yes                            yes: MemoryAccounting= and TasksAccounting= on the slice
+#   WantedBy=multi-user.target                space separated targets that get a .wants/ symlink;
+#                                             empty: nothing pulls the stack in at boot
+#
+# Units= and WantedBy= are lists and follow systemd.unit(5): a repeated
+# assignment appends to the list, an empty assignment resets it. Name=,
+# Description=, Slice=, and Accounting= are plain values; the last
+# assignment wins.
+#
+# Empty lines and lines starting with # or ; are ignored. Keys outside
+# [Stack] and unknown keys are ignored with a message. A file without a valid
+# Name= is skipped with a message; a unit or target name that is not a unit
+# name is skipped with a message. Nothing here can fail the boot: the
+# generator logs to stderr (the journal) and always exits 0 after processing.
+#
+# Directories, highest priority first; a file masks the same file name in the
+# directories after it, and an empty file (or a symlink to /dev/null) masks
+# the stack entirely:
+#
+#   /etc/systemd-migration/stacks.d
+#   /run/systemd-migration/stacks.d
+#   /usr/local/lib/systemd-migration/stacks.d
+#   /usr/lib/systemd-migration/stacks.d
+#
+# $SYSTEMD_MIGRATION_STACKS_DIRS, a colon separated list, replaces that set
+# (for tests and for running the generator by hand). Output goes to the first
+# directory argument (the normal generator directory), so a native unit of
+# the same name under /etc/systemd/system still wins, as systemd.generator(7)
+# recommends; with one argument every output goes there.
+#
+# Only external commands: mkdir and ln, for the .wants/ symlinks.
+
+set -eu
+
+me=systemd-migration-generator
+
+log() {
+    printf '%s: %s\n' "$me" "$*" >&2
+}
+
+case $# in
+    0)
+        log "usage: $me NORMAL-DIR [EARLY-DIR [LATE-DIR]]"
+        exit 1
+        ;;
+esac
+dest=$1
+
+# Whatever goes wrong past this point is logged, not propagated: a generator
+# that fails only loses its own output, but it must not look like a boot problem.
+trap 'rc=$?; [ "$rc" -eq 0 ] || log "stopped early with status $rc; some stacks may be missing"; exit 0' EXIT
+
+# A system generator for the host; nothing to do for the user manager or an initrd.
+if [ "${SYSTEMD_SCOPE:-system}" != system ] || [ "${SYSTEMD_IN_INITRD:-0}" = 1 ]; then
+    exit 0
+fi
+
+dirs=${SYSTEMD_MIGRATION_STACKS_DIRS:-/etc/systemd-migration/stacks.d:/run/systemd-migration/stacks.d:/usr/local/lib/systemd-migration/stacks.d:/usr/lib/systemd-migration/stacks.d}
+
+# Unit names: systemd.unit(5) allows letters, digits, ":", "-", "_", ".", "\"
+# (for \xNN escapes) and "@" for instances; a stack name additionally must
+# not be a template or instance, since it is embedded in two unit names.
+is_unit_name() {
+    case $1 in
+        ''|*[!A-Za-z0-9:_.@\\-]*|*.) return 1 ;;
+        *.*) ;;
+        *) return 1 ;;
+    esac
+    [ ${#1} -le 255 ]
+}
+
+is_stack_name() {
+    case $1 in
+        ''|*[!A-Za-z0-9:_.\\-]*) return 1 ;;
+    esac
+    [ ${#1} -le 200 ]
+}
+
+trim() {
+    # Strips leading and trailing blanks from $1 into $trimmed.
+    trimmed=$1
+    trimmed=${trimmed#"${trimmed%%[![:space:]]*}"}
+    trimmed=${trimmed%"${trimmed##*[![:space:]]}"}
+}
+
+# Reads one description into name, desc, units, slice, accounting, wantedby;
+# returns 1 when the file is malformed beyond use.
+read_description() {
+    path=$1
+    name= desc= units= slice= accounting= wantedby= section=
+    lineno=0
+    while IFS= read -r line || [ -n "$line" ]; do
+        lineno=$((lineno + 1))
+        trim "$line"
+        line=$trimmed
+        case $line in
+            ''|'#'*|';'*)
+                continue
+                ;;
+            '['*']')
+                section=${line#\[}
+                section=${section%\]}
+                case $section in
+                    Stack) ;;
+                    *) log "$path:$lineno: section [$section] is not known and is ignored" ;;
+                esac
+                continue
+                ;;
+            '['*)
+                log "$path:$lineno: malformed section header; skipping the file"
+                return 1
+                ;;
+            *=*)
+                ;;
+            *)
+                log "$path:$lineno: not a key=value line; skipping the file"
+                return 1
+                ;;
+        esac
+        case $section in
+            Stack) ;;
+            '')
+                log "$path:$lineno: assignment before any section; skipping the file"
+                return 1
+                ;;
+            *)
+                continue
+                ;;
+        esac
+        trim "${line%%=*}"
+        key=$trimmed
+        trim "${line#*=}"
+        value=$trimmed
+        # Units= and WantedBy= are lists: like every list setting in
+        # systemd.unit(5) a repeated assignment appends and an empty one
+        # resets. The rest are plain values; the last assignment wins.
+        case $key in
+            Name) name=$value ;;
+            Description) desc=$value ;;
+            Units)
+                case $value in
+                    '') units= ;;
+                    *) units="$units $value" ;;
+                esac
+                ;;
+            Slice) slice=$value ;;
+            Accounting) accounting=$value ;;
+            WantedBy)
+                case $value in
+                    '') wantedby= ;;
+                    *) wantedby="$wantedby $value" ;;
+                esac
+                ;;
+            *) log "$path:$lineno: key $key= is not known and is ignored" ;;
+        esac
+    done < "$path" || {
+        log "$path: cannot read; skipping the file"
+        return 1
+    }
+    if ! is_stack_name "$name"; then
+        log "$path: Name= is missing or is not usable as a unit name (\"$name\"); skipping the file"
+        return 1
+    fi
+    case $slice in
+        '') slice=stack-$name.slice ;;
+        *.slice)
+            if ! is_unit_name "$slice"; then
+                log "$path: Slice=$slice is not a unit name; using stack-$name.slice"
+                slice=stack-$name.slice
+            fi
+            ;;
+        *)
+            log "$path: Slice=$slice does not end in .slice; using stack-$name.slice"
+            slice=stack-$name.slice
+            ;;
+    esac
+    case $accounting in
+        ''|no|false|0|off) accounting=no ;;
+        yes|true|1|on) accounting=yes ;;
+        *)
+            log "$path: Accounting=$accounting is not a boolean; leaving the manager's default"
+            accounting=no
+            ;;
+    esac
+    return 0
+}
+
+write_stack() {
+    path=$1
+    target=$dest/$name.target
+    slicefile=$dest/$slice
+    if [ -e "$target" ]; then
+        log "$path: $name.target was already generated from another description; skipping the file"
+        return 1
+    fi
+    {
+        printf '# Automatically generated by %s from %s\n' "$me" "$path"
+        printf '# Edit that file and run "systemctl daemon-reload"; this unit is replaced on every reload.\n'
+        printf '\n[Unit]\n'
+        printf 'Description=%s\n' "${desc:-stack $name}"
+        printf 'SourcePath=%s\n' "$path"
+        for unit in $units; do
+            if ! is_unit_name "$unit"; then
+                log "$path: \"$unit\" in Units= is not a unit name and is left out"
+                continue
+            fi
+            printf 'Wants=%s\n' "$unit"
+        done
+    } > "$target" || {
+        log "$path: cannot write $target"
+        return 1
+    }
+    {
+        printf '# Automatically generated by %s from %s\n' "$me" "$path"
+        printf '# Edit that file and run "systemctl daemon-reload"; this unit is replaced on every reload.\n'
+        printf '\n[Unit]\n'
+        printf 'Description=%s slice\n' "${desc:-stack $name}"
+        printf 'SourcePath=%s\n' "$path"
+        if [ "$accounting" = yes ]; then
+            printf '\n[Slice]\nMemoryAccounting=yes\nTasksAccounting=yes\n'
+        fi
+    } > "$slicefile" || {
+        log "$path: cannot write $slicefile"
+        return 1
+    }
+    for wanter in $wantedby; do
+        case $wanter in
+            *.target) ;;
+            *)
+                log "$path: WantedBy=$wanter is not a target and is left out"
+                continue
+                ;;
+        esac
+        if ! is_unit_name "$wanter"; then
+            log "$path: WantedBy=$wanter is not a unit name and is left out"
+            continue
+        fi
+        mkdir -p "$dest/$wanter.wants" && ln -sf "../$name.target" "$dest/$wanter.wants/$name.target" || {
+            log "$path: cannot link $name.target into $wanter.wants/"
+            continue
+        }
+    done
+    return 0
+}
+
+# Collect the files highest priority first; a name seen earlier masks later ones.
+seen=
+generated=0
+skipped=0
+remaining=$dirs:
+while [ -n "$remaining" ]; do
+    dir=${remaining%%:*}
+    remaining=${remaining#*:}
+    [ -n "$dir" ] && [ -d "$dir" ] || continue
+    for file in "$dir"/*.conf; do
+        [ -e "$file" ] || [ -L "$file" ] || continue
+        base=${file##*/}
+        case $base in
+            *[!A-Za-z0-9:_.@-]*)
+                log "$file: file name is not plain; skipping it"
+                continue
+                ;;
+        esac
+        case " $seen " in
+            *" $base "*) continue ;;
+        esac
+        seen="$seen $base"
+        if [ ! -s "$file" ]; then
+            # An empty file or a /dev/null symlink masks the stack.
+            continue
+        fi
+        if [ ! -f "$file" ] || [ ! -r "$file" ]; then
+            log "$file: not a readable file; skipping it"
+            continue
+        fi
+        # Word splitting of Units= and WantedBy= must not glob.
+        set -f
+        if read_description "$file" && write_stack "$file"; then
+            generated=$((generated + 1))
+        else
+            skipped=$((skipped + 1))
+        fi
+        set +f
+    done
+done
+
+if [ "$skipped" -gt 0 ]; then
+    log "generated $generated stack(s), skipped $skipped description(s) with problems"
+fi
+exit 0

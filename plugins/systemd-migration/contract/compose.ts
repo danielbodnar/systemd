@@ -39,7 +39,12 @@ export interface ComposePlanOptions {
   generatedBy?: string;
 }
 
-/** Placement for every service: from the plan's placement decisions when resolvable, else the inventory's own scheduling. */
+/**
+ * Placement for every service: from the plan's placement decisions when
+ * resolvable, else the inventory's own scheduling (constraints, platforms,
+ * spread preferences, and `max_replicas_per_node`, as placement.ts applies
+ * them). Problems the derivation finds land in `notes`.
+ */
 export function computePlacement(inv: Inventory, plan: Plan | null, hosts: string[], acceptDefaults: boolean, notes: string[] = []): Map<string, Map<string, number>> {
   const out = new Map<string, Map<string, number>>();
   const scaleOut = plan ? decisionValueOr(plan, PLACEMENT_SCALE_OUT, acceptDefaults, "no") === "yes" : false;
@@ -83,7 +88,7 @@ export function composePlan(inv: Inventory, components: Component[], opts: Compo
     question: "When a replicated service wants more replicas than there are eligible hosts, render numbered instances on the same host?",
     options: [
       { value: "no", label: "one instance per host", consequence: "replicas beyond the eligible hosts are dropped and noted; capacity comes from more hosts" },
-      { value: "yes", label: "scale out on a host", consequence: "numbered units (name-1, name-2) with offset published ports on one host" },
+      { value: "yes", label: "scale out on a host", consequence: "numbered units (name-1, name-2) with offset published ports on one host, never more per host than the source's max_replicas_per_node" },
     ],
     default: "no",
     chosen: ctx.previous(PLACEMENT_SCALE_OUT),
@@ -254,6 +259,13 @@ function finishHost(ctx: RenderContext): void {
   e.credentials.sort();
   ctx.file("expected.json", JSON.stringify(e, null, 2) + "\n");
   const units = [...e.units, ...e.timers, ...e.mounts, ...e.sockets, ...e.targets, ...e.slices].filter((u) => ctx.hasUnit(u));
+  // A target a generator emits has no [Install] section, because the generator
+  // writes the .wants symlink itself, so systemctl enable refuses it; only the
+  // targets rendered as files here can be enabled.
+  const installable = e.targets.filter((t) => ctx.hasUnit(t));
+  const generated = e.targets.filter((t) => !ctx.hasUnit(t));
+  const startLine = (prefix: string) =>
+    [installable.length ? `${prefix}systemctl enable --now ${installable.map(shellQuote).join(" ")}` : null, generated.length ? `${prefix}systemctl start ${generated.map(shellQuote).join(" ")}` : null].filter((x): x is string => x !== null);
   ctx.file(
     "install.sh",
     [
@@ -274,9 +286,9 @@ function finishHost(ctx: RenderContext): void {
       ...ctx.installLines("post"),
       ...(units.length ? [`systemd-analyze verify ${units.map((u) => shellQuote(`/etc/systemd/system/${u}`)).join(" ")}`] : []),
       'if [ "${1:-}" = "--start" ]; then',
-      `    systemctl enable --now ${e.targets.map(shellQuote).join(" ")}`,
+      ...startLine("    "),
       "else",
-      `    echo "installed; start with: systemctl enable --now ${e.targets.join(" ")}"`,
+      `    echo "installed; start with: ${startLine("").join("; ")}"`,
       "fi",
       "",
     ].join("\n"),
