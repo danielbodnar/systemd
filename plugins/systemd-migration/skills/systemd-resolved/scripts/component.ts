@@ -5,7 +5,9 @@
 // mechanism; the component renders what the choice needs on each host.
 
 import type { Component, DecisionSpec, PlanContext, RenderContext } from "../../../contract/component.ts";
-import { publishId } from "../../systemd-networkd/scripts/component.ts";
+import { placementId } from "../../../contract/compose.ts";
+import { splitList } from "../../../contract/plan.ts";
+import { LEASES, type Lease, domainId } from "../../systemd-networkd/scripts/component.ts";
 
 export const DISCOVERY = "resolved.discovery.estate";
 
@@ -52,13 +54,24 @@ export const resolvedComponent: Component = {
       ctx.file("etc/systemd/resolved.conf.d/10-migration.conf", [`# Rendered by ${ctx.rendererName}: multicast resolution for service discovery`, "[Resolve]", "MulticastDNS=yes", "LLMNR=yes", ""].join("\n"));
       ctx.install("post", "systemctl try-restart systemd-resolved.service");
     } else if (how === "hosts") {
-      const lines: string[] = [`# Rendered by ${ctx.rendererName}: service names for the migrated estate; one line per name, pointing at the host that runs it`];
+      const lines: string[] = [`# Rendered by ${ctx.rendererName}: service names for the migrated estate; one line per name, pointing at the host that runs it, or at the machine's static lease on its zone bridge`];
       const hostAddr = (h: string) => ctx.plan.hosts[h]?.addresses?.[0] ?? ctx.inventory.nodes.find((n) => n.hostname === h)?.addr ?? null;
+      const leases = ctx.get<Lease[]>(LEASES) ?? [];
+      const zones = new Set<string>();
+      const segments = new Set<string>();
       for (const svc of [...ctx.inventory.services].sort((a, b) => a.name.localeCompare(b.name))) {
-        const hosts = [...new Set(svc.tasks.filter((t) => t.desired_state === "running").map((t) => t.node))];
+        const hosts = [...new Set(splitList(ctx.valueOr(placementId(svc.name), "")))].sort();
         const names = new Set<string>([svc.name, svc.short_name]);
         for (const n of svc.networks) for (const a of n.aliases) names.add(a);
         for (const h of hosts) {
+          const machines = leases.filter((l) => l.service === svc.name && l.host === h).sort((a, b) => a.base.localeCompare(b.base));
+          if (machines.length) {
+            for (const m of machines) {
+              lines.push(`${m.address} ${[...new Set([m.base, ...names])].join(" ")}`);
+              (m.kind === "lease" ? zones : segments).add(m.network);
+            }
+            continue;
+          }
           const addr = hostAddr(h);
           if (addr) lines.push(`${addr} ${[...names].join(" ")}`);
           else ctx.note(`${svc.name}: no address known for ${h}; add its hosts line by hand`, "decision");
@@ -67,9 +80,10 @@ export const resolvedComponent: Component = {
       ctx.file("etc/hosts.d/systemd-migration.hosts", lines.join("\n") + "\n");
       ctx.install("pre", "cat /etc/hosts.d/systemd-migration.hosts >> /etc/hosts");
       ctx.note("service names are resolved from /etc/hosts (decision resolved.discovery.estate); install.sh appends the rendered fragment once, dedupe it by hand on re-install");
+      for (const z of [...segments].sort()) ctx.note(`machines on the ${z} segment are listed at the address the guest must configure (see the networkd component's notes)`, "decision");
+      for (const z of [...zones].sort()) ctx.note(`machines on zone vz-${z} are listed at their static lease address; on ${ctx.host} their DHCP lease names also resolve under ${ctx.valueOr(domainId(z), "the zone's local lease domain")} through the bridge's LocalLeaseDomain=`);
     } else {
       ctx.note(`service names are published in the site's DNS by decision; the records to create are listed per service in the plan (${ctx.instances.map((i) => `${i.service.name} -> ${ctx.host}${i.service.ports.map((p) => `:${p.published ?? p.target}`).join("")}`).join("; ")})`, "decision");
     }
-    void publishId;
   },
 };

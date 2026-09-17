@@ -1,6 +1,6 @@
 # Migration notes
 
-Rendered by systemd-migration from an inventory captured 2026-09-01T12:00:00Z (4 services, 2 nodes) against a plan of 34 decisions (4 chosen). Components composed, in order: machined, service, creds, resource-control, storage, networkd, resolved, journald, sysext, portable.
+Rendered by systemd-migration from an inventory captured 2026-09-01T12:00:00Z (4 services, 2 nodes) against a plan of 52 decisions (4 chosen). Components composed, in order: machined, service, creds, resource-control, storage, networkd, resolved, journald, sysext, portable, quadlet.
 
 ## Host plan
 
@@ -53,7 +53,7 @@ Rendered by systemd-migration from an inventory captured 2026-09-01T12:00:00Z (4
 - data_postgres: volume data_pgdata moves by "rsync" (decision storage.move.data_pgdata); the runbook step lands at /var/lib/data/data_pgdata
 - web_app: volume web_cache moves by "rsync" (decision storage.move.web_cache); the runbook step lands at /var/lib/web/web_cache
 - data_exporter: member of overlay network data_backend (10.10.2.0/24, local); a plain service shares the host's network namespace, so it reaches peers by host address or the name the resolved component provides; the network's bridge is rendered for the machines attached to it
-- data_exporter: member of macvlan network data_monitoring (192.168.50.0/24, local); a plain service shares the host's network namespace, so it reaches peers by host address or the name the resolved component provides; the network's bridge is rendered for the machines attached to it
+- data_exporter: member of macvlan network data_monitoring (192.168.50.128/25, local); a plain service shares the host's network namespace, so it reaches peers by host address or the name the resolved component provides; the network's bridge is rendered for the machines attached to it
 - data_exporter: the source's VIP becomes one address per host; other services reach it by the host's address or a name the plan provides
 - data_postgres: member of overlay network data_backend (10.10.2.0/24, local); a plain service shares the host's network namespace, so it reaches peers by host address or the name the resolved component provides; the network's bridge is rendered for the machines attached to it
 - web_app: member of overlay network web_frontend (10.10.1.0/24, vxlan-wireguard); a plain service shares the host's network namespace, so it reaches peers by host address or the name the resolved component provides; the network's bridge is rendered for the machines attached to it

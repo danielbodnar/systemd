@@ -1,4 +1,4 @@
-# Rendered by systemd-service: service names for the migrated estate; one line per name, pointing at the host that runs it
+# Rendered by systemd-service: service names for the migrated estate; one line per name, pointing at the host that runs it, or at the machine's static lease on its zone bridge
 10.0.0.12 data_exporter exporter
 10.0.0.12 data_postgres postgres db
 10.0.0.12 web_app app
