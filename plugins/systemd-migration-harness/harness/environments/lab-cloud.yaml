@@ -1,0 +1,16 @@
+# Cloud sandbox for planning and rendering from an uploaded inventory when no
+# production host should be touched yet. File resources are only available on
+# cloud environments, so this is where a captured inventory.json is mounted.
+name: swarm-migration-lab
+description: Anthropic-hosted sandbox for offline planning and rendering from an uploaded inventory.
+config:
+  type: cloud
+  networking:
+    type: limited
+    allow_package_managers: true
+  packages:
+    npm:
+      - bun
+metadata:
+  harness: systemd-migration-harness
+  tier: lab

@@ -1,0 +1,82 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+#
+# Self-hosted Managed Agents worker for the systemd-migration-harness plugin.
+# The worker long-polls Anthropic's work queue (outbound only) and executes the
+# agent's bash and file tools on this host as the unprivileged swarm-agent
+# user. It holds the environment key as a systemd credential and never an
+# organization API key.
+#
+# This process holds the environment key and nothing else agent-controlled
+# runs in it: every bash and file tool call is forwarded to
+# swarm-agent-tools.service, which runs as a different user with no credential,
+# so an approved command cannot read the key. The worker holds no supplementary
+# groups and is never a member of the docker group: that membership is
+# root-equivalent (docker run --privileged -v /:/host) and would void every
+# hardening directive below.
+# The auditor reaches the swarm through DOCKER_HOST in worker.env, pointed at
+# a read-only proxy in front of the manager socket, or the operator runs the
+# capture and drops the directory into the workspace. Rootful Podman and
+# system unit installation stay operator steps in the runbook; the verifier's
+# live mode on rootful Podman therefore runs from the operator's shell, not
+# from this worker.
+#
+# Install: see install-worker.sh. Key: systemd-creds encrypt --name=environment-key
+#          - /etc/credstore.encrypted/swarm-agent.environment-key
+
+[Unit]
+Description=swarm-agent self-hosted sandbox worker
+Documentation=https://platform.claude.com/docs/en/managed-agents/self-hosted-sandboxes
+After=network-online.target swarm-agent-tools.service
+Wants=network-online.target
+Requires=swarm-agent-tools.service
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=notify
+NotifyAccess=all
+User=swarm-agent
+Group=swarm-agent
+Slice=swarm-agent.slice
+WorkingDirectory=/opt/swarm-agent/harness
+ExecStart=/usr/local/bin/bun run src/cli.ts worker --config /etc/swarm-agent/swarm-agent.yaml
+LoadCredentialEncrypted=environment-key:/etc/credstore.encrypted/swarm-agent.environment-key
+EnvironmentFile=-/etc/swarm-agent/worker.env
+Environment=HOME=/var/lib/swarm-agent
+StateDirectory=swarm-agent
+LogsDirectory=swarm-agent
+UMask=0007
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/swarm-agent /mnt/memory
+# The host is read-only apart from the two paths above, and the secret
+# directories do not exist from this process's point of view.
+InaccessiblePaths=-/etc/swarm-migration/secrets -/etc/credstore -/etc/credstore.encrypted
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=no
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+Restart=on-failure
+RestartSec=10s
+KillSignal=SIGTERM
+KillMode=mixed
+TimeoutStopSec=90s
+
+[Install]
+WantedBy=multi-user.target

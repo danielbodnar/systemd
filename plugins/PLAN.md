@@ -397,3 +397,19 @@ applied when it arrives.
    assumes systemd 261 and a kernel of 6.13 or later, which the mount stack
    features require; older hosts fall back to `RootImage=` with DDIs built by
    `systemd-repart`.
+
+## 9. Status
+
+Phase 1 is complete on the `claude/swarm-to-systemd-agent-gcqvex` branch: the
+marketplace is `systemd-dev-plugins`, the first-generation plugin is split into
+`docker-swarm-to-systemd`, `podman-container-to-quadlet`, and
+`systemd-migration-harness`, the inventory contract lives under
+`docker-swarm-to-systemd/contract/` and is vendored by
+`plugins/scripts/sync-contract.sh` with a drift test in the harness suite, and
+the existing tests pass. The open decisions in section 8 were resolved as the
+plan assumed, pending any correction: the ten-plugin layout, shell-only
+verification, upstream-standard tree changes landing in this fork, and systemd
+261 with kernel 6.13 as the target floor. Decision 4 went the other way: the
+restructure continues on the same branch and pull request rather than waiting
+for a merge, so that the renames and the first-generation code are reviewed
+together.

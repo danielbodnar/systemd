@@ -1,20 +1,36 @@
 {
-  "name": "danielbodnar-systemd",
+  "name": "systemd-dev-plugins",
   "owner": {
     "name": "Daniel Bodnar",
     "url": "https://github.com/danielbodnar"
   },
   "metadata": {
-    "description": "Plugins maintained alongside the systemd source tree: agent tooling for moving container orchestration onto systemd-native primitives."
+    "description": "Plugins maintained alongside the systemd source tree: agent tooling for moving container orchestration (Docker Swarm, Compose, Podman, OCI images) onto systemd-native primitives. Each plugin is named <source>-<object>-to-<target> and its skills follow the same pattern."
   },
   "plugins": [
     {
-      "name": "swarm-to-systemd",
-      "source": "./plugins/swarm-to-systemd",
-      "description": "Capture a Docker Swarm multi-node, multi-stack estate and migrate it to Podman Quadlet units under systemd, with a Managed Agents harness that runs the migration agents against production hosts.",
-      "version": "0.1.0",
+      "name": "docker-swarm-to-systemd",
+      "source": "./plugins/docker-swarm-to-systemd",
+      "description": "Capture a Docker Swarm estate into the shared inventory contract and plan its migration to systemd hosts.",
+      "version": "0.2.0",
       "category": "infrastructure",
-      "keywords": ["docker", "swarm", "systemd", "quadlet", "podman", "migration", "managed-agents"]
+      "keywords": ["docker", "swarm", "inventory", "systemd", "migration", "planning"]
+    },
+    {
+      "name": "podman-container-to-quadlet",
+      "source": "./plugins/podman-container-to-quadlet",
+      "description": "Render the inventory into per-host Podman Quadlet units, stack targets, and install scripts.",
+      "version": "0.2.0",
+      "category": "infrastructure",
+      "keywords": ["podman", "quadlet", "systemd", "container", "migration"]
+    },
+    {
+      "name": "systemd-migration-harness",
+      "source": "./plugins/systemd-migration-harness",
+      "description": "Verify rendered and installed units, and run the migration agents unattended on production hosts through a Managed Agents harness.",
+      "version": "0.2.0",
+      "category": "infrastructure",
+      "keywords": ["systemd", "verification", "managed-agents", "harness", "migration"]
     }
   ]
 }

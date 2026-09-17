@@ -1,0 +1,22 @@
+{
+  "name": "systemd-migration-harness",
+  "displayName": "systemd migration harness",
+  "version": "0.2.0",
+  "description": "Verification and unattended execution for the systemd-dev-plugins migration set: a skill that validates rendered or installed units against the migration's expectations (dry-run and live), the cutover-verifier agent, and a Managed Agents harness (config-as-code for ant apply, a self-hosted worker split from a credential-free tool executor, and an operator CLI with an approval policy) that runs the migration agents on production hosts.",
+  "author": {
+    "name": "Daniel Bodnar",
+    "url": "https://github.com/danielbodnar"
+  },
+  "repository": "https://github.com/danielbodnar/systemd",
+  "license": "LGPL-2.1-or-later",
+  "keywords": ["systemd", "verification", "managed-agents", "harness", "quadlet", "migration", "sre"],
+  "userConfig": {
+    "inventory_dir": {
+      "type": "directory",
+      "title": "Inventory directory",
+      "description": "Where rendered/expected.json is read from. Defaults to ./.swarm-migration inside the project, matching docker-swarm-to-systemd.",
+      "required": false,
+      "default": ".swarm-migration"
+    }
+  }
+}

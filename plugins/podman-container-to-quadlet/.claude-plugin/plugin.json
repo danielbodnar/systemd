@@ -1,0 +1,22 @@
+{
+  "name": "podman-container-to-quadlet",
+  "displayName": "Containers to Podman Quadlet",
+  "version": "0.2.0",
+  "description": "Render an inventory produced by docker-swarm-to-systemd into per-host Podman Quadlet units (.container, .network, .volume), stack targets, secret import scripts, and install scripts, with MIGRATION-NOTES.md recording every lossy translation. The Podman target of the systemd-dev-plugins migration set.",
+  "author": {
+    "name": "Daniel Bodnar",
+    "url": "https://github.com/danielbodnar"
+  },
+  "repository": "https://github.com/danielbodnar/systemd",
+  "license": "LGPL-2.1-or-later",
+  "keywords": ["podman", "quadlet", "systemd", "docker", "swarm", "container", "migration"],
+  "userConfig": {
+    "inventory_dir": {
+      "type": "directory",
+      "title": "Inventory directory",
+      "description": "Where inventory.json is read from and the rendered tree is written. Defaults to ./.swarm-migration inside the project, matching docker-swarm-to-systemd.",
+      "required": false,
+      "default": ".swarm-migration"
+    }
+  }
+}

@@ -1,0 +1,10 @@
+# Self-hosted sandbox: tool execution happens on the production host that runs
+# `swarm-agent worker` (see ../systemd/swarm-agent-worker.service). The agent
+# loop stays on Anthropic's side; only bash and file tools run here.
+name: swarm-migration-production
+description: Self-hosted sandbox on a Docker Swarm manager or a target systemd host, driven by the swarm-agent worker.
+config:
+  type: self_hosted
+metadata:
+  harness: systemd-migration-harness
+  tier: production
