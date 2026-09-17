@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: LGPL-2.1-or-later
-# Rendered by docker-image-to-service. Encrypts each secret value into a systemd credential
+# Rendered by systemd-service. Encrypts each secret value into a systemd credential
 # that the units load with LoadCredentialEncrypted=. Values are read from one
 # file per credential under /etc/swarm-migration/secrets/ (root-only, mode
 # 0600), which the operator fills from the old cluster; nothing here prints one.

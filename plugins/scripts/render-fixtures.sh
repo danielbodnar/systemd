@@ -13,8 +13,8 @@ set -euo pipefail
 
 plugins_dir="$(cd "$(dirname "$0")/.." && pwd)"
 fixture="$plugins_dir/../test/test-container-migration"
-normalize="$plugins_dir/docker-swarm-to-systemd/skills/docker-swarm-to-inventory/scripts/normalize.ts"
-render_native="$plugins_dir/oci-image-to-systemd/skills/docker-image-to-service/scripts/render.ts"
+normalize="$plugins_dir/systemd-migration/skills/discover-docker-swarm/scripts/normalize.ts"
+render_native="$plugins_dir/systemd-migration/skills/systemd-service/scripts/render.ts"
 mode="write"
 [ "${1:-}" = "--check" ] && mode="check"
 

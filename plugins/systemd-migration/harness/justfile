@@ -1,0 +1,54 @@
+# swarm-agent harness recipes. `just --list` for a summary.
+
+set shell := ["bash", "-euo", "pipefail", "-c"]
+
+default:
+    @just --list
+
+# Install dependencies.
+install:
+    bun install
+
+# Typecheck the harness and the plugin's Bun scripts.
+check:
+    bun run check
+
+# Run the unit tests.
+test:
+    bun test
+
+# Lint shell scripts in the plugins and the harness.
+shellcheck:
+    shellcheck ../skills/*/scripts/*.sh ../../scripts/*.sh systemd/*.sh
+
+# Fail if the committed fixture estate differs from a fresh normalize and render.
+check-fixtures:
+    bash ../../scripts/render-fixtures.sh --check
+
+# Show what `ant apply` would change without touching anything.
+plan:
+    bun run src/cli.ts apply --dry-run
+
+# Create or update the agents, environments, skills, memory store, and deployment.
+apply *ARGS:
+    bun run src/cli.ts apply {{ARGS}}
+
+# Preflight the operator machine.
+doctor:
+    bun run src/cli.ts doctor
+
+# Start a session for a named task (capture, render, verify, migrate).
+run TASK *ARGS:
+    bun run src/cli.ts run {{TASK}} {{ARGS}}
+
+# List this harness's sessions and the work queue depth.
+status:
+    bun run src/cli.ts status --queue
+
+# Attach a terminal to a running session.
+connect SESSION:
+    bun run src/cli.ts connect {{SESSION}}
+
+# Run the self-hosted worker in the foreground (development only; production uses the unit).
+worker:
+    bun run src/cli.ts worker

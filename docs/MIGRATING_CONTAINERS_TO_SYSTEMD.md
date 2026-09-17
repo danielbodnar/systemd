@@ -9,7 +9,7 @@ SPDX-License-Identifier: LGPL-2.1-or-later
 
 This page maps the concepts of a container orchestrator (Docker, Docker Swarm, Compose) onto the primitives systemd ships, for an operator moving workloads off an orchestrator and onto hosts that systemd manages directly. It is written from the perspective of the tooling under `plugins/` in the source tree, which captures an estate into an inventory and renders it into units, but the map itself is independent of that tooling: every row names the directives and tools involved, so it can be followed by hand.
 
-The map is generated in machine-readable form for each estate by the planner (`plugins/docker-swarm-to-systemd/skills/docker-to-systemd-planner/`), which also checks every directive it names against the man pages of this tree. What follows is the same map in prose.
+The map is generated in machine-readable form for each estate by the planner (`plugins/systemd-migration/skills/migration-planner/`), which also checks every directive it names against the man pages of this tree. What follows is the same map in prose.
 
 ## Targets
 

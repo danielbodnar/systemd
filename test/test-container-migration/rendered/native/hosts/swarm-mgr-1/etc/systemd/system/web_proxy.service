@@ -1,4 +1,4 @@
-# Rendered by docker-image-to-service from swarm service web_proxy (stack web, mode global)
+# Rendered by systemd-service from swarm service web_proxy (stack web, mode global)
 # The image is the service's root; see the [X-Migration] section for its origin.
 
 [Unit]
@@ -46,4 +46,4 @@ Stack=web
 Service=web_proxy
 Image=docker.io/library/caddy:2
 ImageName=library-caddy_2
-Renderer=docker-image-to-service
+Renderer=systemd-service

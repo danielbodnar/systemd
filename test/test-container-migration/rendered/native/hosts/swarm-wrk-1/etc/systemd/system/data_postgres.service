@@ -1,4 +1,4 @@
-# Rendered by docker-image-to-service from swarm service data_postgres (stack data, mode replicated)
+# Rendered by systemd-service from swarm service data_postgres (stack data, mode replicated)
 # The image is the service's root; see the [X-Migration] section for its origin.
 
 [Unit]
@@ -53,4 +53,4 @@ Service=data_postgres
 Image=docker.io/library/postgres:16.4
 ImageDigest=sha256:0000000000000000000000000000000000000000000000000000000000000003
 ImageName=library-postgres_16.4
-Renderer=docker-image-to-service
+Renderer=systemd-service

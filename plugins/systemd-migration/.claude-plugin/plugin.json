@@ -1,0 +1,22 @@
+{
+  "name": "systemd-migration",
+  "displayName": "systemd migration",
+  "version": "0.3.0",
+  "description": "Move container orchestration onto systemd-native infrastructure. Adapters discover an estate (Docker Swarm today, Podman next) into one inventory contract; a planner turns the inventory and the target hosts' systemd capabilities into plan.yaml, a list of decisions the user reviews and approves (target form per service, CIDR mapping, overlay transport, load balancing, where secrets live); and one skill per systemd component (service, machined, networkd, resolved, resource control, credentials, journald, storage, sysext, portable) renders its part of the per-host tree, composed at render time from the plan. Podman Quadlet is an adapter target, kept in full. Use it whenever the user wants to migrate, decommission, or replace Docker Swarm, Compose, or Podman deployments with systemd units, machines, or networks, or asks how a container concept maps onto systemd.",
+  "author": {
+    "name": "Daniel Bodnar",
+    "url": "https://github.com/danielbodnar"
+  },
+  "repository": "https://github.com/danielbodnar/systemd",
+  "license": "LGPL-2.1-or-later",
+  "keywords": ["systemd", "docker", "swarm", "compose", "podman", "quadlet", "nspawn", "vmspawn", "networkd", "resolved", "mstack", "credentials", "journald", "sysext", "portable", "migration", "managed-agents"],
+  "userConfig": {
+    "inventory_dir": {
+      "type": "directory",
+      "title": "Migration directory",
+      "description": "Where discovery output, inventory.json, host capability files, plan.yaml, and the rendered trees are written. Defaults to ./.systemd-migration inside the project.",
+      "required": false,
+      "default": ".systemd-migration"
+    }
+  }
+}

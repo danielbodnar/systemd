@@ -4,5 +4,5 @@
   "docker_host": "local",
   "tasks_captured": 6,
   "compose_dir": "compose",
-  "tool": "docker-swarm-to-systemd/docker-swarm-to-inventory/capture.sh"
+  "tool": "systemd-migration/discover-docker-swarm/capture.sh"
 }

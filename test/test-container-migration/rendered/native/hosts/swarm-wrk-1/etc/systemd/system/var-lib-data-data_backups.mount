@@ -1,4 +1,4 @@
-# Rendered by docker-image-to-service from swarm volume data_backups (driver local, type nfs)
+# Rendered by systemd-service from swarm volume data_backups (driver local, type nfs)
 
 [Unit]
 Description=data_backups (swarm volume, nfs)

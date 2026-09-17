@@ -1,4 +1,4 @@
-# Rendered by docker-image-to-service: healthcheck schedule of swarm service web_app
+# Rendered by systemd-service: healthcheck schedule of swarm service web_app
 
 [Unit]
 Description=healthcheck timer for web_app

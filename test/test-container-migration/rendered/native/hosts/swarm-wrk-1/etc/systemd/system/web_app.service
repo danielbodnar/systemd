@@ -1,4 +1,4 @@
-# Rendered by docker-image-to-service from swarm service web_app (stack web, mode replicated)
+# Rendered by systemd-service from swarm service web_app (stack web, mode replicated)
 # The image is the service's root; see the [X-Migration] section for its origin.
 
 [Unit]
@@ -58,4 +58,4 @@ Service=web_app
 Image=registry.example.com/acme/app:2026.09
 ImageDigest=sha256:0000000000000000000000000000000000000000000000000000000000000002
 ImageName=acme-app_2026.09
-Renderer=docker-image-to-service
+Renderer=systemd-service

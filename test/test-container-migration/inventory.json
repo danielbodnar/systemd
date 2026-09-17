@@ -841,8 +841,8 @@
     "service data_exporter: image quay.io/prometheuscommunity/postgres-exporter:v0.15.0 is not pinned to a digest",
     "service web_app: task t3 on swarm-mgr-1 is failed (task: non-zero exit (137))",
     "service web_app: publishes through the ingress routing mesh; systemd hosts publish per host",
-    "network web_frontend: encrypted overlay; cross-host transport must be replaced (see docker-to-systemd-planner/references/networking.md)",
-    "network data_backend: encrypted overlay; cross-host transport must be replaced (see docker-to-systemd-planner/references/networking.md)",
+    "network web_frontend: encrypted overlay; cross-host transport must be replaced (see migration-planner/references/networking.md)",
+    "network data_backend: encrypted overlay; cross-host transport must be replaced (see migration-planner/references/networking.md)",
     "image docker.io/library/postgres:16.4: not present on the capturing node, so its entrypoint, command, and environment are unknown; the rendered ExecStart= needs a review (used by data_postgres)",
     "image quay.io/prometheuscommunity/postgres-exporter:v0.15.0: not present on the capturing node, so its entrypoint, command, and environment are unknown; the rendered ExecStart= needs a review (used by data_exporter)"
   ],

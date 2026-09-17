@@ -1,4 +1,4 @@
-# Rendered by docker-image-to-service: restarts swarm service web_app after 3 failed healthchecks
+# Rendered by systemd-service: restarts swarm service web_app after 3 failed healthchecks
 
 [Unit]
 Description=restart web_app after a failed healthcheck

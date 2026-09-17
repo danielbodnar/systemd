@@ -1,4 +1,4 @@
-# Rendered by docker-image-to-service: healthcheck of swarm service data_postgres, run by data_postgres-health.timer
+# Rendered by systemd-service: healthcheck of swarm service data_postgres, run by data_postgres-health.timer
 
 [Unit]
 Description=healthcheck for data_postgres

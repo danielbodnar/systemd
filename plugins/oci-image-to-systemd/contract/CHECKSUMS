@@ -1,9 +1,0 @@
-# Vendored from docker-swarm-to-systemd/contract by scripts/sync-contract.sh.
-# Do not edit these files here; change the source and run the script.
-5054201b002a22e3ecf269f9f5f88a3f0e17e2833cc7e82b3af33e8aea1cf81f  inventory-schema.json
-528d5b18eaef645a30993ecaa3a707a645307988ac737fb2d64c8f03a0a55ded  types.ts
-c63fb7a91f8e54863eeee672851edf5ac581b93459fbd461ef3cb7aab8fc7b03  schema.ts
-740c798c0f30a7a552d3756548b6b0d64ffee4ce17f5e8303a30dd647a8c6566  directives.json
-d4c45904b89d7b8684147529c652131a1ea620f0128b0d913662592e00bd3e03  catalog.ts
-703301c433f79d8b380e65cc81502ad1faddfe1f34399fe1ebffe85b14b2e282  placement.ts
-4f0d5d1c0264fba15ca5f36673227dde2017b6ccae4f01814a45c6d57dd09163  unit.ts

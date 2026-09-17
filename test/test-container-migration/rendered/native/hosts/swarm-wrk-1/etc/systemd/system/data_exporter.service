@@ -1,4 +1,4 @@
-# Rendered by docker-image-to-service from swarm service data_exporter (stack data, mode replicated)
+# Rendered by systemd-service from swarm service data_exporter (stack data, mode replicated)
 # The image is the service's root; see the [X-Migration] section for its origin.
 
 [Unit]
@@ -45,4 +45,4 @@ Stack=data
 Service=data_exporter
 Image=quay.io/prometheuscommunity/postgres-exporter:v0.15.0
 ImageName=prometheuscommunity-postgres-exporter_v0.15.0
-Renderer=docker-image-to-service
+Renderer=systemd-service

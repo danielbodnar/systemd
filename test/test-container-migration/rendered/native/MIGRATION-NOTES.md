@@ -1,6 +1,6 @@
 # Migration notes (native services)
 
-Rendered by docker-image-to-service from an inventory captured 2026-09-01T12:00:00Z (4 services, 2 nodes). Each service runs as a systemd service whose root is its image, mounted with RootMStack=; there is no container runtime on the hosts.
+Rendered by systemd-service from an inventory captured 2026-09-01T12:00:00Z (4 services, 2 nodes). Each service runs as a systemd service whose root is its image, mounted with RootMStack=; there is no container runtime on the hosts.
 
 ## Host plan
 
@@ -18,20 +18,20 @@ Rendered by docker-image-to-service from an inventory captured 2026-09-01T12:00:
 | library-postgres_16.4 | docker.io/library/postgres:16.4 | sha256:0000000000000000000000000000000000000000000000000000000000000003 | swarm-wrk-1 |
 | prometheuscommunity-postgres-exporter_v0.15.0 | quay.io/prometheuscommunity/postgres-exporter:v0.15.0 | none (tag not pinned) | swarm-wrk-1 |
 
-`images.json` next to this file drives `pull-images.sh` from the oci-image-to-mstack skill.
+`images.json` next to this file drives `pull-images.sh` from the systemd-machined skill.
 
 ## Needs a human decision
 
 - data_exporter: the Swarm VIP becomes one address per host; other services reach it by the host's address or a name the plan provides
-- data_exporter: attached to overlay data_backend; native services share the host network namespace, so container-network addressing and aliases do not apply until docker-network-to-networkd renders the bridges
+- data_exporter: attached to overlay data_backend; native services share the host network namespace, so container-network addressing and aliases do not apply until systemd-networkd renders the bridges
 - data_exporter: neither the service nor the inventoried image says what to run; ExecStart= is a placeholder that must be replaced before install
-- data_postgres: attached to overlay data_backend; native services share the host network namespace, so container-network addressing and aliases do not apply until docker-network-to-networkd renders the bridges
+- data_postgres: attached to overlay data_backend; native services share the host network namespace, so container-network addressing and aliases do not apply until systemd-networkd renders the bridges
 - data_postgres: neither the service nor the inventoried image says what to run; ExecStart= is a placeholder that must be replaced before install
 - web_app: ingress-mode ports are published in host mode on every host that runs it; front them with a load balancer, DNS round robin, or a VIP (see the translation map)
 - web_app: the Swarm VIP becomes one address per host; other services reach it by the host's address or a name the plan provides
-- web_app: attached to overlay web_frontend; native services share the host network namespace, so container-network addressing and aliases do not apply until docker-network-to-networkd renders the bridges
+- web_app: attached to overlay web_frontend; native services share the host network namespace, so container-network addressing and aliases do not apply until systemd-networkd renders the bridges
 - web_proxy: the Swarm VIP becomes one address per host; other services reach it by the host's address or a name the plan provides
-- web_proxy: attached to overlay web_frontend; native services share the host network namespace, so container-network addressing and aliases do not apply until docker-network-to-networkd renders the bridges
+- web_proxy: attached to overlay web_frontend; native services share the host network namespace, so container-network addressing and aliases do not apply until systemd-networkd renders the bridges
 
 ## Translations to review
 
@@ -57,7 +57,7 @@ Rendered by docker-image-to-service from an inventory captured 2026-09-01T12:00:
 - service data_exporter: image quay.io/prometheuscommunity/postgres-exporter:v0.15.0 is not pinned to a digest
 - service web_app: task t3 on swarm-mgr-1 is failed (task: non-zero exit (137))
 - service web_app: publishes through the ingress routing mesh; systemd hosts publish per host
-- network web_frontend: encrypted overlay; cross-host transport must be replaced (see docker-to-systemd-planner/references/networking.md)
-- network data_backend: encrypted overlay; cross-host transport must be replaced (see docker-to-systemd-planner/references/networking.md)
+- network web_frontend: encrypted overlay; cross-host transport must be replaced (see migration-planner/references/networking.md)
+- network data_backend: encrypted overlay; cross-host transport must be replaced (see migration-planner/references/networking.md)
 - image docker.io/library/postgres:16.4: not present on the capturing node, so its entrypoint, command, and environment are unknown; the rendered ExecStart= needs a review (used by data_postgres)
 - image quay.io/prometheuscommunity/postgres-exporter:v0.15.0: not present on the capturing node, so its entrypoint, command, and environment are unknown; the rendered ExecStart= needs a review (used by data_exporter)

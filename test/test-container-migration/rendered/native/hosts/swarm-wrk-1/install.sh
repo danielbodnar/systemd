@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: LGPL-2.1-or-later
-# Rendered by docker-image-to-service for swarm-wrk-1. Copies the rendered tree into place,
+# Rendered by systemd-service for swarm-wrk-1. Copies the rendered tree into place,
 # fixes ownership and modes, reloads the manager, verifies the units, and
 # optionally starts the stack targets. Pull the images first (pull-images.sh)
 # and import the credentials (secrets/import-credentials.sh).
