@@ -31,7 +31,7 @@ function nfsWhat(v: Volume): { what: string; type: string; options: string } | n
 export const storageComponent: Component = {
   id: "storage",
   title: "Storage (systemd.mount, tmpfiles.d, sysusers.d, repart.d)",
-  covers: ["systemd.mount", "systemd.automount", "systemd.swap", "tmpfiles.d", "systemd-tmpfiles", "sysusers.d", "systemd-sysusers", "systemd-fstab-generator", "systemd-gpt-auto-generator", "systemd-growfs"],
+  covers: ["systemd.mount", "systemd.automount", "systemd.swap", "tmpfiles.d", "systemd-tmpfiles", "sysusers.d", "systemd-sysusers", "systemd-fstab-generator", "systemd-gpt-auto-generator", "systemd-mount", "systemd-loop@.service", "systemd-makefs@.service", "systemd-fsck@.service", "systemd-quotacheck@.service", "systemd-validatefs@.service", "systemd-storage-block@.service", "systemd-storage-fs@.service", "storagectl", "file-hierarchy"],
   after: ["service"],
 
   decide(ctx: PlanContext): DecisionSpec[] {

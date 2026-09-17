@@ -14,7 +14,7 @@ export function namespaceId(stack: string): string {
 export const journaldComponent: Component = {
   id: "journald",
   title: "Logging (journald.conf, systemd.journal-fields, LogNamespace=)",
-  covers: ["systemd-journald.service", "journald.conf", "systemd.journal-fields", "journalctl", "systemd-journal-remote.service", "systemd-journal-upload.service", "systemd-cat"],
+  covers: ["systemd-journald.service", "journald.conf", "systemd.journal-fields", "journalctl", "systemd-journal-remote.service", "journal-remote.conf", "systemd-journal-upload.service", "journal-upload.conf", "systemd-journal-gatewayd.service", "systemd-cat"],
   after: ["service"],
 
   decide(ctx: PlanContext): DecisionSpec[] {

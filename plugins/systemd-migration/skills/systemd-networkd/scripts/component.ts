@@ -31,7 +31,7 @@ function isApplicationNetwork(n: Network): boolean {
 export const networkdComponent: Component = {
   id: "networkd",
   title: "Networking (systemd.network, systemd.netdev, systemd.link, systemd.socket)",
-  covers: ["systemd-networkd.service", "systemd.network", "systemd.netdev", "systemd.link", "networkd.conf", "networkctl", "systemd.socket", "systemd-networkd-wait-online.service", "systemd-network-generator.service"],
+  covers: ["systemd-networkd.service", "systemd.network", "systemd.netdev", "systemd.link", "networkd.conf", "networkctl", "systemd.socket", "systemd-socket-activate", "systemd-socket-proxyd", "systemd.net-naming-scheme", "systemd-networkd-wait-online.service", "systemd-network-generator.service"],
   after: ["service", "machined"],
 
   decide(ctx: PlanContext): DecisionSpec[] {

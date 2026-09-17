@@ -12,7 +12,7 @@ export const DISCOVERY = "resolved.discovery.estate";
 export const resolvedComponent: Component = {
   id: "resolved",
   title: "Name resolution (resolved.conf, systemd.dnssd, resolvectl)",
-  covers: ["systemd-resolved.service", "resolved.conf", "systemd.dnssd", "resolvectl", "nss-resolve", "nss-myhostname", "nss-mymachines", "systemd.dns-delegate"],
+  covers: ["systemd-resolved.service", "resolved.conf", "systemd.dnssd", "resolvectl", "nss-resolve", "nss-myhostname", "nss-mymachines", "systemd.dns-delegate", "dnssec-trust-anchors.d"],
   after: ["networkd"],
 
   decide(ctx: PlanContext): DecisionSpec[] {

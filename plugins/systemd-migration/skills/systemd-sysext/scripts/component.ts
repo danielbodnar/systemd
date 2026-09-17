@@ -15,7 +15,7 @@ export function configsId(stack: string): string {
 export const sysextComponent: Component = {
   id: "sysext",
   title: "Extensions (systemd-sysext, systemd-confext, extension-release)",
-  covers: ["systemd-sysext", "systemd-confext", "systemd-sysext.service", "systemd-confext.service", "os-release"],
+  covers: ["systemd-sysext", "sysext.conf", "os-release"],
   after: ["service"],
 
   decide(ctx: PlanContext): DecisionSpec[] {

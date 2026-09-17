@@ -1,0 +1,46 @@
+{
+  "description": "Which skill claims which page of the systemd surface (contract/surface.json), beyond the pages the components claim in their own `covers` lists, and which pages are not applicable to a container migration with the reason. The harness coverage test fails when a surface page is unclaimed, claimed twice, or claimed under a name the surface does not have.",
+  "skills": {
+    "systemd-verify": ["systemd-analyze", "systemctl", "systemd-delta"],
+    "discover-systemd-hosts": ["systemd-detect-virt", "systemd-id128", "systemd-path"],
+    "migration-planner": ["systemd.offline-updates", "systemd-run", "systemd-run-generator", "daemon"],
+    "podman-quadlet": []
+  },
+  "not_applicable": {
+    "boot, firmware, measured boot, and disk encryption: a container estate has no equivalent, the target hosts are installed before the migration": [
+      "bootctl", "systemd-boot", "systemd-stub", "bootup", "loader.conf", "kernel-install", "kernel-command-line", "ukify",
+      "systemd-bless-boot.service", "systemd-bless-boot-generator", "systemd-boot-check-no-failures.service", "systemd-boot-clear-sysfail.service",
+      "systemd-boot-random-seed.service", "systemd-random-seed.service", "systemd-measure", "systemd-pcrlock", "systemd.pcrlock",
+      "systemd-pcrphase.service", "systemd-tpm2-setup.service", "systemd-tpm2-generator", "systemd-tpm2-clear.service", "systemd-tpm2-swtpm.service",
+      "systemd-sbsign", "systemd-keyutil", "systemd-bsod.service", "systemd-cryptenroll", "systemd-cryptsetup", "systemd-cryptsetup-generator",
+      "crypttab", "veritytab", "integritytab", "systemd-veritysetup@.service", "systemd-veritysetup-generator",
+      "systemd-integritysetup@.service", "systemd-integritysetup-generator", "systemd-hibernate-resume.service", "systemd-hibernate-resume-generator",
+      "systemd-sleep.conf", "systemd-suspend.service", "systemd-poweroff.service", "systemd-soft-reboot.service", "poweroff", "shutdown",
+      "systemd-volatile-root.service", "systemd-remount-fs.service"
+    ],
+    "host provisioning, updates, and reporting: the target host's own lifecycle, outside what the estate defines": [
+      "systemd-factory-reset", "systemd-factory-reset-generator", "systemd-firstboot", "systemd-sysinstall", "systemd-update-done.service",
+      "systemd-system-update-generator", "systemd-sysupdate", "systemd-sysupdated.service", "sysupdate.d", "sysupdate.components", "sysupdate.features",
+      "updatectl", "clonetab", "systemd-clonesetup", "systemd-clonesetup-generator", "systemd-report", "systemd-report-files@.service",
+      "systemd-report-sign-plain@.service", "systemd-report-sign-tpm2@.service", "systemd-report-sign-tsm@.service", "systemd-imds", "systemd-imds-generator",
+      "systemd-imdsd@.service", "systemd-ssh-generator", "systemd-ssh-issue", "systemd-ssh-proxy", "systemd.preset", "systemd-machine-id-setup",
+      "systemd-machine-id-commit.service", "machine-id", "hostname", "hostnamectl", "systemd-hostnamed.service", "systemd-storagetm.service"
+    ],
+    "hardware, devices, and the console: managed by the host, not by the migrated workloads": [
+      "udev", "udevadm", "udev.conf", "hwdb", "systemd-hwdb", "systemd-udevd.service", "systemd-udev-settle.service", "systemd.device",
+      "systemd-backlight@.service", "systemd-rfkill.service", "systemd-battery-check.service", "systemd-ac-power", "binfmt.d", "systemd-binfmt.service",
+      "modules-load.d", "systemd-modules-load.service", "vconsole.conf", "systemd-vconsole-setup.service", "systemd-mute-console", "locale.conf",
+      "localectl", "systemd-localed.service", "localtime", "timedatectl", "systemd-timedated.service", "timesyncd.conf", "systemd-timesyncd.service",
+      "systemd-time-wait-sync.service", "systemd-pstore.service", "pstore.conf", "systemd-coredump", "coredump.conf", "coredumpctl"
+    ],
+    "users, sessions, and interactive access: no container concept maps to a login session": [
+      "loginctl", "logind.conf", "systemd-logind.service", "pam_systemd", "pam_systemd_home", "pam_systemd_loadkey", "homectl", "homed.conf",
+      "systemd-homed.service", "userdbctl", "systemd-userdbd.service", "nss-systemd", "systemd-user-sessions.service", "user@.service", "run0",
+      "systemd-inhibit", "systemd-getty-generator", "systemd-xdg-autostart-generator", "systemd-update-utmp.service", "systemd-stdio-bridge",
+      "systemd-pty-forward", "environment.d", "systemd-environment-d-generator", "systemd.environment-generator"
+    ],
+    "the manager and its IPC: used by every unit the components render, nothing to translate": [
+      "systemd", "systemd.generator", "systemd-debug-generator", "busctl", "varlinkctl"
+    ]
+  }
+}

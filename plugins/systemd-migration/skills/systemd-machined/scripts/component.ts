@@ -18,7 +18,7 @@ export function rootFormId(host: string): string {
 export const machinedComponent: Component = {
   id: "machined",
   title: "Machines and images (systemd-nspawn, systemd-vmspawn, importctl, systemd.mstack, systemd.nspawn, machinectl)",
-  covers: ["systemd-nspawn", "systemd.nspawn", "systemd-vmspawn", "importctl", "machinectl", "systemd-machined.service", "systemd-importd.service", "systemd.mstack", "systemd-mstack", "systemd.v", "systemd-dissect", "systemd-repart", "repart.d", "systemd-nspawn@.service"],
+  covers: ["systemd-nspawn", "systemd.nspawn", "systemd-vmspawn", "importctl", "machinectl", "systemd-machined.service", "systemd-importd.service", "systemd-import-generator", "systemd.mstack", "systemd-mstack", "systemd.v", "vpick", "systemd-vpick", "systemd-dissect", "systemd-repart", "repart.d", "systemd-mountfsd.service", "systemd-nsresourced.service", "systemd-machine-tag@.service", "systemd.image-policy", "systemd.image-filter"],
 
   decide(ctx: PlanContext): DecisionSpec[] {
     const out: DecisionSpec[] = [];

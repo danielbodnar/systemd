@@ -98,7 +98,7 @@ export function healthDecisionId(service: string): string {
 export const serviceComponent: Component = {
   id: "service",
   title: "Services (systemd.service, systemd.exec, systemd.unit, systemd.target, systemd.timer)",
-  covers: ["systemd.service", "systemd.exec", "systemd.unit", "systemd.target", "systemd.timer", "systemd.kill", "systemd.special", "sysctl.d"],
+  covers: ["systemd.service", "systemd.exec", "systemd.unit", "systemd.target", "systemd.timer", "systemd.path", "systemd.kill", "systemd.special", "systemd.syntax", "systemd.time", "systemd.rr", "sysctl.d", "systemd-sysctl.service", "systemd-notify", "systemd-escape", "machine-info"],
   after: ["machined"],
 
   decide(ctx: PlanContext): DecisionSpec[] {

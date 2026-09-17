@@ -12,7 +12,7 @@ export const ACCOUNTING = "resource-control.accounting.estate";
 export const resourceControlComponent: Component = {
   id: "resource-control",
   title: "Resource control (systemd.resource-control, systemd.slice)",
-  covers: ["systemd.resource-control", "systemd.slice", "systemd.scope", "systemd-oomd.service", "oomd.conf"],
+  covers: ["systemd.resource-control", "systemd.slice", "systemd.scope", "systemd-oomd.service", "oomd.conf", "oomctl", "iocost.conf", "systemd-cgls", "systemd-cgtop", "systemd-system.conf"],
   after: ["service"],
 
   decide(_ctx: PlanContext): DecisionSpec[] {

@@ -16,7 +16,7 @@ export function capsuleId(stack: string): string {
 export const portableComponent: Component = {
   id: "portable",
   title: "Portable services and capsules (portablectl, capsule@.service)",
-  covers: ["portablectl", "systemd-portabled.service", "capsule@.service", "systemd.image-policy", "systemd.image-filter"],
+  covers: ["portablectl", "systemd-portabled.service", "capsule@.service"],
   after: ["service", "machined"],
 
   decide(ctx: PlanContext): DecisionSpec[] {

@@ -28,7 +28,7 @@ const STORES = [
 export const credsComponent: Component = {
   id: "creds",
   title: "Credentials (systemd-creds, LoadCredential=, LoadCredentialEncrypted=, ImportCredential=)",
-  covers: ["systemd-creds", "systemd.system-credentials"],
+  covers: ["systemd-creds", "systemd.system-credentials", "systemd-ask-password", "systemd-tty-ask-password-agent", "systemd-ask-password-console.service"],
   after: ["service"],
 
   decide(ctx: PlanContext): DecisionSpec[] {

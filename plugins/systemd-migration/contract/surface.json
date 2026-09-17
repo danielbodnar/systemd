@@ -1,0 +1,1868 @@
+{
+ "systemd_version": "262~rc3",
+ "generated_by": "migration-planner/scripts/build-catalog.ts",
+ "pages": [
+  {
+   "name": "binfmt.d",
+   "volume": 5,
+   "purpose": "Configure additional binary formats for executables at boot",
+   "aliases": []
+  },
+  {
+   "name": "bootctl",
+   "volume": 1,
+   "purpose": "Control EFI firmware boot settings and manage boot loader",
+   "aliases": []
+  },
+  {
+   "name": "bootup",
+   "volume": 7,
+   "purpose": "System bootup process",
+   "aliases": []
+  },
+  {
+   "name": "busctl",
+   "volume": 1,
+   "purpose": "Introspect the bus",
+   "aliases": []
+  },
+  {
+   "name": "capsule@.service",
+   "volume": 5,
+   "purpose": "System unit for the capsule service manager",
+   "aliases": []
+  },
+  {
+   "name": "clonetab",
+   "volume": 5,
+   "purpose": "Configuration for dm-clone block devices",
+   "aliases": []
+  },
+  {
+   "name": "coredump.conf",
+   "volume": 5,
+   "purpose": "Core dump storage configuration files",
+   "aliases": [
+    "coredump.conf.d"
+   ]
+  },
+  {
+   "name": "coredumpctl",
+   "volume": 1,
+   "purpose": "Retrieve and process saved core dumps and metadata",
+   "aliases": []
+  },
+  {
+   "name": "crypttab",
+   "volume": 5,
+   "purpose": "Configuration for encrypted block devices",
+   "aliases": []
+  },
+  {
+   "name": "daemon",
+   "volume": 7,
+   "purpose": "Writing and packaging system daemons",
+   "aliases": []
+  },
+  {
+   "name": "dnssec-trust-anchors.d",
+   "volume": 5,
+   "purpose": "DNSSEC trust anchor configuration files",
+   "aliases": [
+    "systemd.positive",
+    "systemd.negative"
+   ]
+  },
+  {
+   "name": "environment.d",
+   "volume": 5,
+   "purpose": "Definition of user service environment",
+   "aliases": []
+  },
+  {
+   "name": "file-hierarchy",
+   "volume": 7,
+   "purpose": "systemd file system hierarchy requirements",
+   "aliases": []
+  },
+  {
+   "name": "homectl",
+   "volume": 1,
+   "purpose": "Create, remove, change or inspect home directories",
+   "aliases": [
+    "systemd-homed-firstboot.service"
+   ]
+  },
+  {
+   "name": "homed.conf",
+   "volume": 5,
+   "purpose": "Home area/user account manager configuration files",
+   "aliases": [
+    "homed.conf.d"
+   ]
+  },
+  {
+   "name": "hostname",
+   "volume": 5,
+   "purpose": "Local hostname configuration file",
+   "aliases": []
+  },
+  {
+   "name": "hostnamectl",
+   "volume": 1,
+   "purpose": "Control the system hostname",
+   "aliases": []
+  },
+  {
+   "name": "hwdb",
+   "volume": 7,
+   "purpose": "Hardware Database",
+   "aliases": []
+  },
+  {
+   "name": "importctl",
+   "volume": 1,
+   "purpose": "Download, import or export disk images",
+   "aliases": []
+  },
+  {
+   "name": "integritytab",
+   "volume": 5,
+   "purpose": "Configuration for integrity block devices",
+   "aliases": []
+  },
+  {
+   "name": "iocost.conf",
+   "volume": 5,
+   "purpose": "Configuration files for the iocost solution manager",
+   "aliases": []
+  },
+  {
+   "name": "journal-remote.conf",
+   "volume": 5,
+   "purpose": "Configuration files for the service accepting remote journal uploads",
+   "aliases": [
+    "journal-remote.conf.d"
+   ]
+  },
+  {
+   "name": "journal-upload.conf",
+   "volume": 5,
+   "purpose": "Configuration files for the journal upload service",
+   "aliases": [
+    "journal-upload.conf.d"
+   ]
+  },
+  {
+   "name": "journalctl",
+   "volume": 1,
+   "purpose": "Print log entries from the systemd journal",
+   "aliases": []
+  },
+  {
+   "name": "journald.conf",
+   "volume": 5,
+   "purpose": "Journal service configuration files",
+   "aliases": [
+    "journald.conf.d",
+    "journald@.conf"
+   ]
+  },
+  {
+   "name": "kernel-command-line",
+   "volume": 7,
+   "purpose": "Kernel command line parameters",
+   "aliases": []
+  },
+  {
+   "name": "kernel-install",
+   "volume": 8,
+   "purpose": "Add and remove kernel and initrd images to and from the boot partition",
+   "aliases": []
+  },
+  {
+   "name": "loader.conf",
+   "volume": 5,
+   "purpose": "Configuration file for systemd-boot",
+   "aliases": []
+  },
+  {
+   "name": "locale.conf",
+   "volume": 5,
+   "purpose": "Configuration file for locale settings",
+   "aliases": []
+  },
+  {
+   "name": "localectl",
+   "volume": 1,
+   "purpose": "Control the system locale and keyboard layout settings",
+   "aliases": []
+  },
+  {
+   "name": "localtime",
+   "volume": 5,
+   "purpose": "Local timezone configuration file",
+   "aliases": []
+  },
+  {
+   "name": "loginctl",
+   "volume": 1,
+   "purpose": "Control the systemd login manager",
+   "aliases": []
+  },
+  {
+   "name": "logind.conf",
+   "volume": 5,
+   "purpose": "Login manager configuration files",
+   "aliases": [
+    "logind.conf.d"
+   ]
+  },
+  {
+   "name": "machine-id",
+   "volume": 5,
+   "purpose": "Local machine ID configuration file",
+   "aliases": []
+  },
+  {
+   "name": "machine-info",
+   "volume": 5,
+   "purpose": "Local machine information file",
+   "aliases": []
+  },
+  {
+   "name": "machinectl",
+   "volume": 1,
+   "purpose": "Control the systemd machine manager",
+   "aliases": []
+  },
+  {
+   "name": "modules-load.d",
+   "volume": 5,
+   "purpose": "Configure kernel modules to load at boot",
+   "aliases": []
+  },
+  {
+   "name": "networkctl",
+   "volume": 1,
+   "purpose": "Query or modify the status of network links",
+   "aliases": []
+  },
+  {
+   "name": "networkd.conf",
+   "volume": 5,
+   "purpose": "Global Network configuration files",
+   "aliases": [
+    "networkd.conf.d"
+   ]
+  },
+  {
+   "name": "nss-myhostname",
+   "volume": 8,
+   "purpose": "Hostname resolution for the locally configured system hostname",
+   "aliases": [
+    "libnss_myhostname.so.2"
+   ]
+  },
+  {
+   "name": "nss-mymachines",
+   "volume": 8,
+   "purpose": "Hostname resolution for local container instances",
+   "aliases": [
+    "libnss_mymachines.so.2"
+   ]
+  },
+  {
+   "name": "nss-resolve",
+   "volume": 8,
+   "purpose": "Hostname resolution via systemd-resolved.service",
+   "aliases": [
+    "libnss_resolve.so.2"
+   ]
+  },
+  {
+   "name": "nss-systemd",
+   "volume": 8,
+   "purpose": "UNIX user and group name resolution for user/group lookup via Varlink",
+   "aliases": [
+    "libnss_systemd.so.2"
+   ]
+  },
+  {
+   "name": "oomctl",
+   "volume": 1,
+   "purpose": "Analyze the state stored in systemd-oomd",
+   "aliases": []
+  },
+  {
+   "name": "oomd.conf",
+   "volume": 5,
+   "purpose": "Global systemd-oomd configuration files",
+   "aliases": [
+    "oomd.conf.d"
+   ]
+  },
+  {
+   "name": "os-release",
+   "volume": 5,
+   "purpose": "Operating system identification",
+   "aliases": [
+    "initrd-release",
+    "extension-release"
+   ]
+  },
+  {
+   "name": "pam_systemd",
+   "volume": 8,
+   "purpose": "Register user sessions in the systemd login manager",
+   "aliases": []
+  },
+  {
+   "name": "pam_systemd_home",
+   "volume": 8,
+   "purpose": "Authenticate users and mount home directories via systemd-homed.service",
+   "aliases": []
+  },
+  {
+   "name": "pam_systemd_loadkey",
+   "volume": 8,
+   "purpose": "Read password from kernel keyring and set it as PAM authtok",
+   "aliases": []
+  },
+  {
+   "name": "portablectl",
+   "volume": 1,
+   "purpose": "Attach, detach or inspect portable service images",
+   "aliases": []
+  },
+  {
+   "name": "poweroff",
+   "volume": 8,
+   "purpose": "Power off, reboot, or halt the machine",
+   "aliases": [
+    "reboot",
+    "halt"
+   ]
+  },
+  {
+   "name": "pstore.conf",
+   "volume": 5,
+   "purpose": "PStore configuration file",
+   "aliases": [
+    "pstore.conf.d"
+   ]
+  },
+  {
+   "name": "repart.d",
+   "volume": 5,
+   "purpose": "Partition Definition Files for Automatic Boot-Time Repartitioning",
+   "aliases": []
+  },
+  {
+   "name": "resolvectl",
+   "volume": 1,
+   "purpose": "Resolve domain names, IPV4 and IPv6 addresses, DNS resource records, and services; introspect and reconfigure the DNS resolver",
+   "aliases": [
+    "resolvconf"
+   ]
+  },
+  {
+   "name": "resolved.conf",
+   "volume": 5,
+   "purpose": "Network Name Resolution configuration files",
+   "aliases": [
+    "resolved.conf.d"
+   ]
+  },
+  {
+   "name": "run0",
+   "volume": 1,
+   "purpose": "Elevate privileges",
+   "aliases": []
+  },
+  {
+   "name": "shutdown",
+   "volume": 8,
+   "purpose": "Halt, power off or reboot the machine",
+   "aliases": []
+  },
+  {
+   "name": "storagectl",
+   "volume": 1,
+   "purpose": "Enumerate and mount storage volumes provided by storage providers",
+   "aliases": [
+    "mount.storage"
+   ]
+  },
+  {
+   "name": "sysctl.d",
+   "volume": 5,
+   "purpose": "Configure kernel parameters at boot",
+   "aliases": []
+  },
+  {
+   "name": "sysext.conf",
+   "volume": 5,
+   "purpose": "Configuration files for systemd-sysext",
+   "aliases": [
+    "confext.conf",
+    "sysext.conf.d",
+    "confext.conf.d"
+   ]
+  },
+  {
+   "name": "systemctl",
+   "volume": 1,
+   "purpose": "Control the systemd system and service manager",
+   "aliases": []
+  },
+  {
+   "name": "systemd-ac-power",
+   "volume": 1,
+   "purpose": "Report whether we are connected to an external power source",
+   "aliases": []
+  },
+  {
+   "name": "systemd-analyze",
+   "volume": 1,
+   "purpose": "Analyze and debug system manager",
+   "aliases": []
+  },
+  {
+   "name": "systemd-ask-password-console.service",
+   "volume": 8,
+   "purpose": "Query the user for system passwords on the console and via wall",
+   "aliases": [
+    "systemd-ask-password-console.path",
+    "systemd-ask-password-wall.service",
+    "systemd-ask-password-wall.path"
+   ]
+  },
+  {
+   "name": "systemd-ask-password",
+   "volume": 1,
+   "purpose": "Query the user for a system password",
+   "aliases": []
+  },
+  {
+   "name": "systemd-backlight@.service",
+   "volume": 8,
+   "purpose": "Load and save the display backlight brightness at boot and shutdown",
+   "aliases": [
+    "systemd-backlight"
+   ]
+  },
+  {
+   "name": "systemd-battery-check.service",
+   "volume": 8,
+   "purpose": "Check battery level whether there's enough charge, and power off if not",
+   "aliases": [
+    "systemd-battery-check"
+   ]
+  },
+  {
+   "name": "systemd-binfmt.service",
+   "volume": 8,
+   "purpose": "Configure additional binary formats for executables at boot",
+   "aliases": [
+    "systemd-binfmt"
+   ]
+  },
+  {
+   "name": "systemd-bless-boot-generator",
+   "volume": 8,
+   "purpose": "Pull systemd-bless-boot.service into the initial boot transaction when boot counting is in effect",
+   "aliases": []
+  },
+  {
+   "name": "systemd-bless-boot.service",
+   "volume": 8,
+   "purpose": "Mark current boot process as successful",
+   "aliases": [
+    "systemd-bless-boot"
+   ]
+  },
+  {
+   "name": "systemd-boot-check-no-failures.service",
+   "volume": 8,
+   "purpose": "verify that the system booted up cleanly",
+   "aliases": [
+    "systemd-boot-check-no-failures"
+   ]
+  },
+  {
+   "name": "systemd-boot-clear-sysfail.service",
+   "volume": 8,
+   "purpose": "Clear LoaderEntrySysFail entry",
+   "aliases": []
+  },
+  {
+   "name": "systemd-boot-random-seed.service",
+   "volume": 8,
+   "purpose": "Refresh boot loader random seed at boot",
+   "aliases": []
+  },
+  {
+   "name": "systemd-boot",
+   "volume": 7,
+   "purpose": "A simple UEFI boot manager",
+   "aliases": [
+    "sd-boot"
+   ]
+  },
+  {
+   "name": "systemd-bsod.service",
+   "volume": 8,
+   "purpose": "Displays boot-time emergency log message in full screen",
+   "aliases": [
+    "systemd-bsod"
+   ]
+  },
+  {
+   "name": "systemd-cat",
+   "volume": 1,
+   "purpose": "Connect a pipeline or program's output with the journal",
+   "aliases": []
+  },
+  {
+   "name": "systemd-cgls",
+   "volume": 1,
+   "purpose": "Recursively show control group contents",
+   "aliases": []
+  },
+  {
+   "name": "systemd-cgtop",
+   "volume": 1,
+   "purpose": "Show top control groups by their resource usage",
+   "aliases": []
+  },
+  {
+   "name": "systemd-clonesetup-generator",
+   "volume": 8,
+   "purpose": "Unit generator for /etc/clonetab",
+   "aliases": []
+  },
+  {
+   "name": "systemd-clonesetup",
+   "volume": 8,
+   "purpose": "Set up and tear down dm-clone devices",
+   "aliases": [
+    "systemd-clonesetup@.service"
+   ]
+  },
+  {
+   "name": "systemd-coredump",
+   "volume": 8,
+   "purpose": "Acquire, save and process core dumps",
+   "aliases": [
+    "systemd-coredump.socket",
+    "systemd-coredump@.service",
+    "systemd-coredump-register.service",
+    "systemd-coredumpd.service"
+   ]
+  },
+  {
+   "name": "systemd-creds",
+   "volume": 1,
+   "purpose": "Lists, shows, encrypts and decrypts service credentials",
+   "aliases": []
+  },
+  {
+   "name": "systemd-cryptenroll",
+   "volume": 1,
+   "purpose": "Enroll PKCS#11, FIDO2, TPM2 token/devices to LUKS2 encrypted volumes",
+   "aliases": []
+  },
+  {
+   "name": "systemd-cryptsetup-generator",
+   "volume": 8,
+   "purpose": "Unit generator for /etc/crypttab",
+   "aliases": []
+  },
+  {
+   "name": "systemd-cryptsetup",
+   "volume": 8,
+   "purpose": "Full disk decryption logic",
+   "aliases": [
+    "systemd-cryptsetup@.service",
+    "system-systemd\\x2dcryptsetup.slice"
+   ]
+  },
+  {
+   "name": "systemd-debug-generator",
+   "volume": 8,
+   "purpose": "Generator for enabling a runtime debug shell and masking specific units at boot",
+   "aliases": []
+  },
+  {
+   "name": "systemd-delta",
+   "volume": 1,
+   "purpose": "Find overridden configuration files",
+   "aliases": []
+  },
+  {
+   "name": "systemd-detect-virt",
+   "volume": 1,
+   "purpose": "Detect execution in a virtualized environment",
+   "aliases": []
+  },
+  {
+   "name": "systemd-dissect",
+   "volume": 1,
+   "purpose": "Dissect Discoverable Disk Images (DDIs)",
+   "aliases": [
+    "mount.ddi"
+   ]
+  },
+  {
+   "name": "systemd-environment-d-generator",
+   "volume": 8,
+   "purpose": "Load variables specified by environment.d",
+   "aliases": [
+    "30-systemd-environment-d-generator"
+   ]
+  },
+  {
+   "name": "systemd-escape",
+   "volume": 1,
+   "purpose": "Escape strings for usage in systemd unit names",
+   "aliases": []
+  },
+  {
+   "name": "systemd-factory-reset-generator",
+   "volume": 8,
+   "purpose": "Pull factory-reset-now.target into the initial boot transaction when factory reset has been requested",
+   "aliases": []
+  },
+  {
+   "name": "systemd-factory-reset",
+   "volume": 8,
+   "purpose": "Request or complete a factory reset operation, or query current factory reset mode",
+   "aliases": [
+    "systemd-factory-reset-request.service",
+    "systemd-factory-reset-complete.service",
+    "systemd-factory-reset.socket",
+    "systemd-factory-reset@.service"
+   ]
+  },
+  {
+   "name": "systemd-firstboot",
+   "volume": 1,
+   "purpose": "Initialize basic system settings on or before the first boot-up of a system",
+   "aliases": [
+    "systemd-firstboot.service"
+   ]
+  },
+  {
+   "name": "systemd-fsck@.service",
+   "volume": 8,
+   "purpose": "File system checker logic",
+   "aliases": [
+    "systemd-fsck-root.service",
+    "systemd-fsck-usr.service",
+    "systemd-fsck"
+   ]
+  },
+  {
+   "name": "systemd-fstab-generator",
+   "volume": 8,
+   "purpose": "Unit generator for /etc/fstab",
+   "aliases": []
+  },
+  {
+   "name": "systemd-getty-generator",
+   "volume": 8,
+   "purpose": "Generator for enabling getty instances on the console",
+   "aliases": []
+  },
+  {
+   "name": "systemd-gpt-auto-generator",
+   "volume": 8,
+   "purpose": "Generator for automatically discovering and mounting root, /home/, /srv/, /var/ and /var/tmp/ partitions, as well as discovering and enabling swap partitions, based on GPT partition type GUIDs",
+   "aliases": []
+  },
+  {
+   "name": "systemd-hibernate-resume-generator",
+   "volume": 8,
+   "purpose": "Unit generator for resume= kernel parameter",
+   "aliases": []
+  },
+  {
+   "name": "systemd-hibernate-resume.service",
+   "volume": 8,
+   "purpose": "Resume from hibernation",
+   "aliases": [
+    "systemd-hibernate-clear.service",
+    "systemd-hibernate-resume"
+   ]
+  },
+  {
+   "name": "systemd-homed.service",
+   "volume": 8,
+   "purpose": "Home Area/User Account Manager",
+   "aliases": [
+    "systemd-homed"
+   ]
+  },
+  {
+   "name": "systemd-hostnamed.service",
+   "volume": 8,
+   "purpose": "Daemon to control system hostname from programs",
+   "aliases": [
+    "systemd-hostnamed"
+   ]
+  },
+  {
+   "name": "systemd-hwdb",
+   "volume": 8,
+   "purpose": "hardware database management tool",
+   "aliases": []
+  },
+  {
+   "name": "systemd-id128",
+   "volume": 1,
+   "purpose": "Generate and print sd-128 identifiers",
+   "aliases": []
+  },
+  {
+   "name": "systemd-imds-generator",
+   "volume": 8,
+   "purpose": "Generator to automatically enable IMDS on supporting environments",
+   "aliases": []
+  },
+  {
+   "name": "systemd-imds",
+   "volume": 1,
+   "purpose": "Cloud IMDS (Instance Metadata Service) tool",
+   "aliases": [
+    "systemd-imds-import.service"
+   ]
+  },
+  {
+   "name": "systemd-imdsd@.service",
+   "volume": 8,
+   "purpose": "Cloud IMDS (Instance Metadata Service) client",
+   "aliases": [
+    "systemd-imdsd",
+    "systemd-imdsd.socket",
+    "systemd-imdsd-early-network.service"
+   ]
+  },
+  {
+   "name": "systemd-import-generator",
+   "volume": 8,
+   "purpose": "Generator for automatically downloading disk images at boot",
+   "aliases": []
+  },
+  {
+   "name": "systemd-importd.service",
+   "volume": 8,
+   "purpose": "VM and container image import and export service",
+   "aliases": [
+    "systemd-importd"
+   ]
+  },
+  {
+   "name": "systemd-inhibit",
+   "volume": 1,
+   "purpose": "Execute a program with an inhibition lock taken",
+   "aliases": []
+  },
+  {
+   "name": "systemd-integritysetup-generator",
+   "volume": 8,
+   "purpose": "Unit generator for integrity protected block devices",
+   "aliases": []
+  },
+  {
+   "name": "systemd-integritysetup@.service",
+   "volume": 8,
+   "purpose": "Disk integrity protection logic",
+   "aliases": [
+    "systemd-integritysetup"
+   ]
+  },
+  {
+   "name": "systemd-journal-gatewayd.service",
+   "volume": 8,
+   "purpose": "HTTP server for journal events",
+   "aliases": [
+    "systemd-journal-gatewayd.socket",
+    "systemd-journal-gatewayd"
+   ]
+  },
+  {
+   "name": "systemd-journal-remote.service",
+   "volume": 8,
+   "purpose": "Receive journal messages over the network",
+   "aliases": [
+    "systemd-journal-remote.socket",
+    "systemd-journal-remote"
+   ]
+  },
+  {
+   "name": "systemd-journal-upload.service",
+   "volume": 8,
+   "purpose": "Send journal messages over the network",
+   "aliases": [
+    "systemd-journal-upload"
+   ]
+  },
+  {
+   "name": "systemd-journald.service",
+   "volume": 8,
+   "purpose": "Journal service",
+   "aliases": [
+    "systemd-journald.socket",
+    "systemd-journald-dev-log.socket",
+    "systemd-journald-audit.socket",
+    "systemd-journald@.service",
+    "systemd-journald@.socket",
+    "systemd-journald-varlink@.socket",
+    "systemd-journald"
+   ]
+  },
+  {
+   "name": "systemd-keyutil",
+   "volume": 1,
+   "purpose": "Perform various operations on private keys and X.509 certificates",
+   "aliases": []
+  },
+  {
+   "name": "systemd-localed.service",
+   "volume": 8,
+   "purpose": "Locale bus mechanism",
+   "aliases": [
+    "systemd-localed"
+   ]
+  },
+  {
+   "name": "systemd-logind.service",
+   "volume": 8,
+   "purpose": "Login manager",
+   "aliases": [
+    "systemd-logind"
+   ]
+  },
+  {
+   "name": "systemd-loop@.service",
+   "volume": 8,
+   "purpose": "Attach a loopback block device",
+   "aliases": []
+  },
+  {
+   "name": "systemd-machine-id-commit.service",
+   "volume": 8,
+   "purpose": "Commit a transient machine ID to disk",
+   "aliases": []
+  },
+  {
+   "name": "systemd-machine-id-setup",
+   "volume": 1,
+   "purpose": "Initialize the machine ID in /etc/machine-id",
+   "aliases": []
+  },
+  {
+   "name": "systemd-machine-tag@.service",
+   "volume": 8,
+   "purpose": "Add a machine tag to the host",
+   "aliases": []
+  },
+  {
+   "name": "systemd-machined.service",
+   "volume": 8,
+   "purpose": "Virtual machine and container registration manager",
+   "aliases": [
+    "systemd-machined"
+   ]
+  },
+  {
+   "name": "systemd-makefs@.service",
+   "volume": 8,
+   "purpose": "Creating and growing file systems on demand",
+   "aliases": [
+    "systemd-mkswap@.service",
+    "systemd-growfs@.service",
+    "systemd-growfs-root.service",
+    "systemd-makefs",
+    "systemd-growfs"
+   ]
+  },
+  {
+   "name": "systemd-measure",
+   "volume": 1,
+   "purpose": "Pre-calculate and sign expected TPM2 PCR 11 values for booted unified kernel images",
+   "aliases": []
+  },
+  {
+   "name": "systemd-modules-load.service",
+   "volume": 8,
+   "purpose": "Load kernel modules at boot",
+   "aliases": [
+    "systemd-modules-load"
+   ]
+  },
+  {
+   "name": "systemd-mount",
+   "volume": 1,
+   "purpose": "Establish and destroy transient mount or auto-mount points",
+   "aliases": [
+    "systemd-umount"
+   ]
+  },
+  {
+   "name": "systemd-mountfsd.service",
+   "volume": 8,
+   "purpose": "Disk Image File System Mount Service",
+   "aliases": [
+    "systemd-mountfsd"
+   ]
+  },
+  {
+   "name": "systemd-mstack",
+   "volume": 1,
+   "purpose": "Mstack Discoverable Disk Images (DDIs)",
+   "aliases": [
+    "mount.mstack"
+   ]
+  },
+  {
+   "name": "systemd-mute-console",
+   "volume": 1,
+   "purpose": "Temporarily mute kernel log output and service manager status output to the system console",
+   "aliases": [
+    "systemd-mute-console@.service",
+    "systemd-mute-console.socket"
+   ]
+  },
+  {
+   "name": "systemd-network-generator.service",
+   "volume": 8,
+   "purpose": "Generate network configuration from the kernel command line",
+   "aliases": [
+    "systemd-network-generator"
+   ]
+  },
+  {
+   "name": "systemd-networkd-wait-online.service",
+   "volume": 8,
+   "purpose": "Wait for network to come online",
+   "aliases": [
+    "systemd-networkd-wait-online@.service",
+    "systemd-networkd-wait-online"
+   ]
+  },
+  {
+   "name": "systemd-networkd.service",
+   "volume": 8,
+   "purpose": "Network manager",
+   "aliases": [
+    "systemd-networkd"
+   ]
+  },
+  {
+   "name": "systemd-notify",
+   "volume": 1,
+   "purpose": "Notify service manager about start-up completion and other daemon status changes",
+   "aliases": []
+  },
+  {
+   "name": "systemd-nspawn",
+   "volume": 1,
+   "purpose": "Spawn a command or OS in a lightweight container",
+   "aliases": []
+  },
+  {
+   "name": "systemd-nsresourced.service",
+   "volume": 8,
+   "purpose": "User Namespace Resource Delegation Service",
+   "aliases": [
+    "systemd-nsresourced"
+   ]
+  },
+  {
+   "name": "systemd-oomd.service",
+   "volume": 8,
+   "purpose": "A userspace out-of-memory (OOM) killer",
+   "aliases": [
+    "systemd-oomd"
+   ]
+  },
+  {
+   "name": "systemd-path",
+   "volume": 1,
+   "purpose": "List and query system and user paths",
+   "aliases": []
+  },
+  {
+   "name": "systemd-pcrlock",
+   "volume": 8,
+   "purpose": "Analyze and predict TPM2 PCR states and generate an access policy from the prediction",
+   "aliases": [
+    "systemd-pcrlock-file-system.service",
+    "systemd-pcrlock-firmware-code.service",
+    "systemd-pcrlock-firmware-config.service",
+    "systemd-pcrlock-machine-id.service",
+    "systemd-pcrlock-make-policy.service",
+    "systemd-pcrlock-secureboot-authority.service",
+    "systemd-pcrlock-secureboot-policy.service"
+   ]
+  },
+  {
+   "name": "systemd-pcrphase.service",
+   "volume": 8,
+   "purpose": "Measure boot phases, machine ID, product UUID, user records and file system identity into TPM PCRs and NvPCRs",
+   "aliases": [
+    "systemd-pcrphase-sysinit.service",
+    "systemd-pcrphase-initrd.service",
+    "systemd-pcrmachine.service",
+    "systemd-pcrosseparator.service",
+    "systemd-pcrproduct.service",
+    "systemd-pcrlogin@.service",
+    "systemd-pcrfs-root.service",
+    "systemd-pcrfs@.service",
+    "systemd-pcrnvdone.service",
+    "systemd-pcrphase-factory-reset.service",
+    "systemd-pcrphase-storage-target-mode.service",
+    "systemd-pcrextend"
+   ]
+  },
+  {
+   "name": "systemd-portabled.service",
+   "volume": 8,
+   "purpose": "Portable service manager",
+   "aliases": [
+    "systemd-portabled"
+   ]
+  },
+  {
+   "name": "systemd-poweroff.service",
+   "volume": 8,
+   "purpose": "System shutdown logic",
+   "aliases": [
+    "systemd-halt.service",
+    "systemd-reboot.service",
+    "systemd-kexec.service",
+    "systemd-shutdown"
+   ]
+  },
+  {
+   "name": "systemd-pstore.service",
+   "volume": 8,
+   "purpose": "A service to archive contents of pstore",
+   "aliases": [
+    "systemd-pstore"
+   ]
+  },
+  {
+   "name": "systemd-pty-forward",
+   "volume": 1,
+   "purpose": "Run a command with a custom terminal background color or title",
+   "aliases": []
+  },
+  {
+   "name": "systemd-quotacheck@.service",
+   "volume": 8,
+   "purpose": "File system quota checker logic",
+   "aliases": [
+    "systemd-quotacheck-root.service",
+    "systemd-quotacheck"
+   ]
+  },
+  {
+   "name": "systemd-random-seed.service",
+   "volume": 8,
+   "purpose": "Load and save the OS system random seed at boot and shutdown",
+   "aliases": [
+    "systemd-random-seed"
+   ]
+  },
+  {
+   "name": "systemd-remount-fs.service",
+   "volume": 8,
+   "purpose": "Remount root and kernel file systems",
+   "aliases": [
+    "systemd-remount-fs"
+   ]
+  },
+  {
+   "name": "systemd-repart",
+   "volume": 8,
+   "purpose": "Automatically grow and add partitions, and generate disk images (DDIs)",
+   "aliases": [
+    "systemd-repart.service"
+   ]
+  },
+  {
+   "name": "systemd-report-files@.service",
+   "volume": 8,
+   "purpose": "Report the contents of files as system report metrics",
+   "aliases": [
+    "systemd-report-files.socket",
+    "systemd-report-files"
+   ]
+  },
+  {
+   "name": "systemd-report-sign-plain@.service",
+   "volume": 8,
+   "purpose": "Sign system reports with a local software key",
+   "aliases": [
+    "systemd-report-sign-plain.socket",
+    "systemd-report-sign-plain"
+   ]
+  },
+  {
+   "name": "systemd-report-sign-tpm2@.service",
+   "volume": 8,
+   "purpose": "Sign system reports with a set of signed TPM2 attestations",
+   "aliases": [
+    "systemd-report-sign-tpm2.socket",
+    "systemd-report-sign-tpm2"
+   ]
+  },
+  {
+   "name": "systemd-report-sign-tsm@.service",
+   "volume": 8,
+   "purpose": "Sign system reports with a confidential-computing attestation report",
+   "aliases": [
+    "systemd-report-sign-tsm.socket",
+    "systemd-report-sign-tsm"
+   ]
+  },
+  {
+   "name": "systemd-report",
+   "volume": 1,
+   "purpose": "Generate report of system metrics",
+   "aliases": []
+  },
+  {
+   "name": "systemd-resolved.service",
+   "volume": 8,
+   "purpose": "Network Name Resolution manager",
+   "aliases": [
+    "systemd-resolved"
+   ]
+  },
+  {
+   "name": "systemd-rfkill.service",
+   "volume": 8,
+   "purpose": "Load and save the RF kill switch state at boot and change",
+   "aliases": [
+    "systemd-rfkill.socket",
+    "systemd-rfkill"
+   ]
+  },
+  {
+   "name": "systemd-run-generator",
+   "volume": 8,
+   "purpose": "Generator for invoking commands specified on the kernel command line as system service",
+   "aliases": []
+  },
+  {
+   "name": "systemd-run",
+   "volume": 1,
+   "purpose": "Run programs in transient scope units, service units, or path-, socket-, or timer-triggered service units",
+   "aliases": []
+  },
+  {
+   "name": "systemd-sbsign",
+   "volume": 1,
+   "purpose": "Sign PE binaries for EFI Secure Boot",
+   "aliases": []
+  },
+  {
+   "name": "systemd-sleep.conf",
+   "volume": 5,
+   "purpose": "Suspend and hibernation configuration file",
+   "aliases": [
+    "sleep.conf.d"
+   ]
+  },
+  {
+   "name": "systemd-socket-activate",
+   "volume": 1,
+   "purpose": "Test socket activation of daemons",
+   "aliases": []
+  },
+  {
+   "name": "systemd-socket-proxyd",
+   "volume": 8,
+   "purpose": "Bidirectionally proxy local sockets to another (possibly remote) socket",
+   "aliases": []
+  },
+  {
+   "name": "systemd-soft-reboot.service",
+   "volume": 8,
+   "purpose": "Userspace reboot operation",
+   "aliases": []
+  },
+  {
+   "name": "systemd-ssh-generator",
+   "volume": 8,
+   "purpose": "Generator for binding a socket-activated SSH server to local AF_VSOCK and AF_UNIX sockets",
+   "aliases": []
+  },
+  {
+   "name": "systemd-ssh-issue",
+   "volume": 1,
+   "purpose": "Generator for SSH login prompt drop-ins",
+   "aliases": []
+  },
+  {
+   "name": "systemd-ssh-proxy",
+   "volume": 1,
+   "purpose": "SSH client plugin for connecting to AF_VSOCK and AF_UNIX sockets",
+   "aliases": []
+  },
+  {
+   "name": "systemd-stdio-bridge",
+   "volume": 1,
+   "purpose": "D-Bus proxy",
+   "aliases": []
+  },
+  {
+   "name": "systemd-storage-block@.service",
+   "volume": 8,
+   "purpose": "Storage provider exposing local block devices as storage volumes",
+   "aliases": [
+    "systemd-storage-block.socket",
+    "systemd-storage-block"
+   ]
+  },
+  {
+   "name": "systemd-storage-fs@.service",
+   "volume": 8,
+   "purpose": "Storage provider exposing regular files and directories as storage volumes",
+   "aliases": [
+    "systemd-storage-fs.socket",
+    "systemd-storage-fs"
+   ]
+  },
+  {
+   "name": "systemd-storagetm.service",
+   "volume": 8,
+   "purpose": "Exposes all local block devices as NVMe-TCP mass storage devices",
+   "aliases": [
+    "systemd-storagetm"
+   ]
+  },
+  {
+   "name": "systemd-stub",
+   "volume": 7,
+   "purpose": "A simple UEFI kernel boot stub",
+   "aliases": [
+    "sd-stub",
+    "linuxx64.efi.stub",
+    "linuxia32.efi.stub",
+    "linuxaa64.efi.stub"
+   ]
+  },
+  {
+   "name": "systemd-suspend.service",
+   "volume": 8,
+   "purpose": "System sleep state logic",
+   "aliases": [
+    "systemd-hibernate.service",
+    "systemd-hybrid-sleep.service",
+    "systemd-suspend-then-hibernate.service",
+    "systemd-sleep"
+   ]
+  },
+  {
+   "name": "systemd-sysctl.service",
+   "volume": 8,
+   "purpose": "Configure kernel parameters at boot",
+   "aliases": [
+    "systemd-sysctl"
+   ]
+  },
+  {
+   "name": "systemd-sysext",
+   "volume": 8,
+   "purpose": "Activates System Extension Images",
+   "aliases": [
+    "systemd-sysext.service",
+    "systemd-sysext-initrd.service",
+    "systemd-sysext-sysroot.service",
+    "systemd-confext",
+    "systemd-confext.service",
+    "systemd-confext-initrd.service",
+    "systemd-confext-sysroot.service"
+   ]
+  },
+  {
+   "name": "systemd-sysinstall",
+   "volume": 8,
+   "purpose": "Simple OS installer",
+   "aliases": [
+    "systemd-sysinstall.service"
+   ]
+  },
+  {
+   "name": "systemd-system-update-generator",
+   "volume": 8,
+   "purpose": "Generator for redirecting boot to offline update mode",
+   "aliases": []
+  },
+  {
+   "name": "systemd-system.conf",
+   "volume": 5,
+   "purpose": "System and session service manager configuration files",
+   "aliases": [
+    "system.conf.d",
+    "systemd-user.conf",
+    "user.conf.d"
+   ]
+  },
+  {
+   "name": "systemd-sysupdate",
+   "volume": 8,
+   "purpose": "Automatically Update OS or Other Resources",
+   "aliases": [
+    "systemd-sysupdate-update.service",
+    "systemd-sysupdate-update.timer",
+    "systemd-sysupdate-reboot.service",
+    "systemd-sysupdate-reboot.timer",
+    "systemd-sysupdate-auto-enable.service",
+    "systemd-sysupdate.service",
+    "systemd-sysupdate.timer"
+   ]
+  },
+  {
+   "name": "systemd-sysupdated.service",
+   "volume": 8,
+   "purpose": "System Update Service",
+   "aliases": [
+    "systemd-sysupdated"
+   ]
+  },
+  {
+   "name": "systemd-sysusers",
+   "volume": 8,
+   "purpose": "Allocate system users and groups",
+   "aliases": [
+    "systemd-sysusers.service"
+   ]
+  },
+  {
+   "name": "systemd-time-wait-sync.service",
+   "volume": 8,
+   "purpose": "Wait until kernel time is synchronized",
+   "aliases": [
+    "systemd-time-wait-sync"
+   ]
+  },
+  {
+   "name": "systemd-timedated.service",
+   "volume": 8,
+   "purpose": "Time and date bus mechanism",
+   "aliases": [
+    "systemd-timedated"
+   ]
+  },
+  {
+   "name": "systemd-timesyncd.service",
+   "volume": 8,
+   "purpose": "Network Time Synchronization",
+   "aliases": [
+    "systemd-timesyncd"
+   ]
+  },
+  {
+   "name": "systemd-tmpfiles",
+   "volume": 8,
+   "purpose": "Create, delete, and clean up files and directories",
+   "aliases": [
+    "systemd-tmpfiles-setup.service",
+    "systemd-tmpfiles-setup-dev-early.service",
+    "systemd-tmpfiles-setup-dev.service",
+    "systemd-tmpfiles-clean.service",
+    "systemd-tmpfiles-clean.timer"
+   ]
+  },
+  {
+   "name": "systemd-tpm2-clear.service",
+   "volume": 8,
+   "purpose": "Request that the TPM security chip is cleared on next boot",
+   "aliases": []
+  },
+  {
+   "name": "systemd-tpm2-generator",
+   "volume": 8,
+   "purpose": "Generator for inserting TPM2 synchronization point in the boot process",
+   "aliases": []
+  },
+  {
+   "name": "systemd-tpm2-setup.service",
+   "volume": 8,
+   "purpose": "Set up the TPM2 Storage Root Key (SRK), Endorsement Key (EK), and initialize NvPCRs at boot",
+   "aliases": [
+    "systemd-tpm2-setup-early.service",
+    "systemd-tpm2-setup"
+   ]
+  },
+  {
+   "name": "systemd-tpm2-swtpm.service",
+   "volume": 8,
+   "purpose": "Provide a fallback software TPM",
+   "aliases": [
+    "systemd-tpm2-swtpm"
+   ]
+  },
+  {
+   "name": "systemd-tty-ask-password-agent",
+   "volume": 1,
+   "purpose": "List or process pending systemd password requests",
+   "aliases": []
+  },
+  {
+   "name": "systemd-udev-settle.service",
+   "volume": 8,
+   "purpose": "Wait for all pending udev events to be handled",
+   "aliases": []
+  },
+  {
+   "name": "systemd-udevd.service",
+   "volume": 8,
+   "purpose": "Device event managing daemon",
+   "aliases": [
+    "systemd-udevd-kernel.socket",
+    "systemd-udevd-varlink.socket",
+    "systemd-udevd"
+   ]
+  },
+  {
+   "name": "systemd-update-done.service",
+   "volume": 8,
+   "purpose": "Mark /etc/ and /var/ as fully updated",
+   "aliases": [
+    "systemd-update-done"
+   ]
+  },
+  {
+   "name": "systemd-update-utmp.service",
+   "volume": 8,
+   "purpose": "Write audit and utmp updates at bootup and shutdown",
+   "aliases": [
+    "systemd-update-utmp"
+   ]
+  },
+  {
+   "name": "systemd-user-sessions.service",
+   "volume": 8,
+   "purpose": "Permit user logins after boot, prohibit user logins at shutdown",
+   "aliases": [
+    "systemd-user-sessions"
+   ]
+  },
+  {
+   "name": "systemd-userdbd.service",
+   "volume": 8,
+   "purpose": "JSON User/Group Record Query Multiplexer/NSS Compatibility",
+   "aliases": [
+    "systemd-userdbd"
+   ]
+  },
+  {
+   "name": "systemd-validatefs@.service",
+   "volume": 8,
+   "purpose": "Validate File System Mount Constraint Data",
+   "aliases": []
+  },
+  {
+   "name": "systemd-vconsole-setup.service",
+   "volume": 8,
+   "purpose": "Configure the virtual consoles",
+   "aliases": [
+    "systemd-vconsole-setup"
+   ]
+  },
+  {
+   "name": "systemd-veritysetup-generator",
+   "volume": 8,
+   "purpose": "Unit generator for verity protected block devices",
+   "aliases": []
+  },
+  {
+   "name": "systemd-veritysetup@.service",
+   "volume": 8,
+   "purpose": "Disk verity protection logic",
+   "aliases": [
+    "systemd-veritysetup"
+   ]
+  },
+  {
+   "name": "systemd-vmspawn",
+   "volume": 1,
+   "purpose": "Spawn an OS in a virtual machine",
+   "aliases": []
+  },
+  {
+   "name": "systemd-volatile-root.service",
+   "volume": 8,
+   "purpose": "Make the root file system volatile",
+   "aliases": [
+    "systemd-volatile-root"
+   ]
+  },
+  {
+   "name": "systemd-vpick",
+   "volume": 1,
+   "purpose": "Resolve paths to .v/ versioned directories",
+   "aliases": []
+  },
+  {
+   "name": "systemd-xdg-autostart-generator",
+   "volume": 8,
+   "purpose": "User unit generator for XDG autostart files",
+   "aliases": []
+  },
+  {
+   "name": "systemd.automount",
+   "volume": 5,
+   "purpose": "Automount unit configuration",
+   "aliases": []
+  },
+  {
+   "name": "systemd.device",
+   "volume": 5,
+   "purpose": "Device unit configuration",
+   "aliases": []
+  },
+  {
+   "name": "systemd.dns-delegate",
+   "volume": 5,
+   "purpose": "DNS Server Delegation Configuration",
+   "aliases": []
+  },
+  {
+   "name": "systemd.dnssd",
+   "volume": 5,
+   "purpose": "DNS-SD configuration",
+   "aliases": []
+  },
+  {
+   "name": "systemd.environment-generator",
+   "volume": 7,
+   "purpose": "systemd environment file generators",
+   "aliases": []
+  },
+  {
+   "name": "systemd.exec",
+   "volume": 5,
+   "purpose": "Execution environment configuration",
+   "aliases": []
+  },
+  {
+   "name": "systemd.generator",
+   "volume": 7,
+   "purpose": "systemd unit generators",
+   "aliases": []
+  },
+  {
+   "name": "systemd.image-filter",
+   "volume": 7,
+   "purpose": "Disk Image Dissection Filter",
+   "aliases": []
+  },
+  {
+   "name": "systemd.image-policy",
+   "volume": 7,
+   "purpose": "Disk Image Dissection Policy",
+   "aliases": []
+  },
+  {
+   "name": "systemd.journal-fields",
+   "volume": 7,
+   "purpose": "Special journal fields",
+   "aliases": []
+  },
+  {
+   "name": "systemd.kill",
+   "volume": 5,
+   "purpose": "Process killing procedure configuration",
+   "aliases": []
+  },
+  {
+   "name": "systemd.link",
+   "volume": 5,
+   "purpose": "Network device configuration",
+   "aliases": []
+  },
+  {
+   "name": "systemd.mount",
+   "volume": 5,
+   "purpose": "Mount unit configuration",
+   "aliases": []
+  },
+  {
+   "name": "systemd.mstack",
+   "volume": 7,
+   "purpose": "Mount stacks in self descriptive directories",
+   "aliases": []
+  },
+  {
+   "name": "systemd.net-naming-scheme",
+   "volume": 7,
+   "purpose": "Network device naming schemes",
+   "aliases": []
+  },
+  {
+   "name": "systemd.netdev",
+   "volume": 5,
+   "purpose": "Virtual Network Device configuration",
+   "aliases": []
+  },
+  {
+   "name": "systemd.network",
+   "volume": 5,
+   "purpose": "Network configuration",
+   "aliases": []
+  },
+  {
+   "name": "systemd.nspawn",
+   "volume": 5,
+   "purpose": "Container settings",
+   "aliases": []
+  },
+  {
+   "name": "systemd.offline-updates",
+   "volume": 7,
+   "purpose": "Implementation of offline updates in systemd",
+   "aliases": []
+  },
+  {
+   "name": "systemd.path",
+   "volume": 5,
+   "purpose": "Path unit configuration",
+   "aliases": []
+  },
+  {
+   "name": "systemd.pcrlock",
+   "volume": 5,
+   "purpose": "PCR measurement prediction files",
+   "aliases": [
+    "systemd.pcrlock.d"
+   ]
+  },
+  {
+   "name": "systemd.preset",
+   "volume": 5,
+   "purpose": "Service enablement presets",
+   "aliases": []
+  },
+  {
+   "name": "systemd.resource-control",
+   "volume": 5,
+   "purpose": "Resource control unit settings",
+   "aliases": []
+  },
+  {
+   "name": "systemd.rr",
+   "volume": 5,
+   "purpose": "Local static DNS resource record definitions",
+   "aliases": []
+  },
+  {
+   "name": "systemd.scope",
+   "volume": 5,
+   "purpose": "Scope unit configuration",
+   "aliases": []
+  },
+  {
+   "name": "systemd.service",
+   "volume": 5,
+   "purpose": "Service unit configuration",
+   "aliases": []
+  },
+  {
+   "name": "systemd.slice",
+   "volume": 5,
+   "purpose": "Slice unit configuration",
+   "aliases": []
+  },
+  {
+   "name": "systemd.socket",
+   "volume": 5,
+   "purpose": "Socket unit configuration",
+   "aliases": []
+  },
+  {
+   "name": "systemd.special",
+   "volume": 7,
+   "purpose": "Special systemd units",
+   "aliases": []
+  },
+  {
+   "name": "systemd.swap",
+   "volume": 5,
+   "purpose": "Swap unit configuration",
+   "aliases": []
+  },
+  {
+   "name": "systemd.syntax",
+   "volume": 7,
+   "purpose": "General syntax of systemd configuration files",
+   "aliases": []
+  },
+  {
+   "name": "systemd.system-credentials",
+   "volume": 7,
+   "purpose": "System Credentials",
+   "aliases": []
+  },
+  {
+   "name": "systemd.target",
+   "volume": 5,
+   "purpose": "Target unit configuration",
+   "aliases": []
+  },
+  {
+   "name": "systemd.time",
+   "volume": 7,
+   "purpose": "Time and date specifications",
+   "aliases": []
+  },
+  {
+   "name": "systemd.timer",
+   "volume": 5,
+   "purpose": "Timer unit configuration",
+   "aliases": []
+  },
+  {
+   "name": "systemd.unit",
+   "volume": 5,
+   "purpose": "Unit configuration",
+   "aliases": []
+  },
+  {
+   "name": "systemd.v",
+   "volume": 7,
+   "purpose": "Directory with Versioned Resources",
+   "aliases": []
+  },
+  {
+   "name": "systemd",
+   "volume": 1,
+   "purpose": "systemd system and service manager",
+   "aliases": [
+    "init"
+   ]
+  },
+  {
+   "name": "sysupdate.components",
+   "volume": 5,
+   "purpose": "Definition Files for Update Components",
+   "aliases": []
+  },
+  {
+   "name": "sysupdate.d",
+   "volume": 5,
+   "purpose": "Transfer Definition Files for Automatic Updates",
+   "aliases": []
+  },
+  {
+   "name": "sysupdate.features",
+   "volume": 5,
+   "purpose": "Definition Files for Optional Features",
+   "aliases": []
+  },
+  {
+   "name": "sysusers.d",
+   "volume": 5,
+   "purpose": "Declarative allocation of system users and groups",
+   "aliases": []
+  },
+  {
+   "name": "timedatectl",
+   "volume": 1,
+   "purpose": "Control the system time and date",
+   "aliases": []
+  },
+  {
+   "name": "timesyncd.conf",
+   "volume": 5,
+   "purpose": "Network Time Synchronization configuration files",
+   "aliases": [
+    "timesyncd.conf.d"
+   ]
+  },
+  {
+   "name": "tmpfiles.d",
+   "volume": 5,
+   "purpose": "Configuration for creation, deletion, and cleaning of files and directories",
+   "aliases": []
+  },
+  {
+   "name": "udev.conf",
+   "volume": 5,
+   "purpose": "Configuration for device event managing daemon",
+   "aliases": [
+    "udev.conf.d"
+   ]
+  },
+  {
+   "name": "udev",
+   "volume": 7,
+   "purpose": "Dynamic device management",
+   "aliases": []
+  },
+  {
+   "name": "udevadm",
+   "volume": 8,
+   "purpose": "udev management tool",
+   "aliases": []
+  },
+  {
+   "name": "ukify",
+   "volume": 1,
+   "purpose": "Combine components into a signed Unified Kernel Image for UEFI systems",
+   "aliases": []
+  },
+  {
+   "name": "updatectl",
+   "volume": 1,
+   "purpose": "Control the system update service",
+   "aliases": []
+  },
+  {
+   "name": "user@.service",
+   "volume": 5,
+   "purpose": "System units to start the user manager",
+   "aliases": [
+    "user-runtime-dir@.service",
+    "systemd-user-runtime-dir"
+   ]
+  },
+  {
+   "name": "userdbctl",
+   "volume": 1,
+   "purpose": "Inspect users, groups and group memberships",
+   "aliases": []
+  },
+  {
+   "name": "varlinkctl",
+   "volume": 1,
+   "purpose": "Introspect with and invoke Varlink services",
+   "aliases": []
+  },
+  {
+   "name": "vconsole.conf",
+   "volume": 5,
+   "purpose": "Configuration file for the virtual console",
+   "aliases": []
+  },
+  {
+   "name": "veritytab",
+   "volume": 5,
+   "purpose": "Configuration for verity block devices",
+   "aliases": []
+  },
+  {
+   "name": "vpick",
+   "volume": 7,
+   "purpose": "",
+   "aliases": []
+  }
+ ]
+}

@@ -10,7 +10,13 @@
 // a directive this tree does not document is a test failure rather than a
 // surprise on the host.
 //
-//   bun build-catalog.ts [--man DIR] [--version FILE] [-o FILE]
+//   bun build-catalog.ts [--man DIR] [--version FILE] [-o FILE] [--surface FILE]
+//
+// It also writes contract/surface.json: every administrator-facing man page
+// (volumes 1, 5, 7, 8) with its purpose and aliases. The coverage test in the
+// harness checks that each of those pages is claimed by one component skill
+// or listed as not applicable with a reason, so support for the tree's
+// surface is measured rather than asserted.
 //
 // Defaults resolve from the script's location inside the systemd tree:
 // ../../../../../man and meson.version, writing ../../../contract/directives.json.
@@ -217,6 +223,43 @@ export function buildCatalog(manDir: string, version: string): Catalog {
   return catalog;
 }
 
+/** One man page of the systemd surface a migration could touch: volumes 1 (tools), 5 (files), 7 (concepts), 8 (daemons and admin). */
+export interface SurfacePage {
+  name: string;
+  volume: number;
+  purpose: string;
+  /** Other names the page documents (refname entries), for lookups by alias. */
+  aliases: string[];
+}
+
+export interface Surface {
+  systemd_version: string;
+  generated_by: string;
+  pages: SurfacePage[];
+}
+
+/** Pages that document conventions for other pages rather than a thing systemd ships. */
+const SURFACE_TEMPLATES = new Set(["directives-template", "standard-options", "standard-specifiers", "standard-conf", "system-only", "system-or-user-ns", "system-or-user-ns-mountfsd", "system-or-user-ns-mountfsd-mount-options", "user-system-options", "version-info", "cgroup-sandboxing", "supported-controllers", "experimental", "libsystemd-notes", "vtable-example", "tc", "unit-states", "libsystemd-pkgconfig", "systemd.directives", "systemd.index", "smbios-type-11"]);
+
+/** Every page in man/ that is part of the administrator-facing surface: what the coverage test measures the components against. */
+export function buildSurface(manDir: string, version: string): Surface {
+  const pages: SurfacePage[] = [];
+  for (const f of readdirSync(manDir).sort()) {
+    if (!f.endsWith(".xml")) continue;
+    const name = f.slice(0, -4);
+    if (name.startsWith("org.freedesktop.") || SURFACE_TEMPLATES.has(name)) continue;
+    const text = readFileSync(join(manDir, f), "utf8");
+    const vol = /<manvolnum>(\d+)<\/manvolnum>/.exec(text);
+    if (!vol) continue;
+    const volume = Number(vol[1]);
+    if (![1, 5, 7, 8].includes(volume)) continue;
+    const purpose = stripTags(/<refpurpose>([\s\S]*?)<\/refpurpose>/.exec(text)?.[1] ?? "");
+    const aliases = [...text.matchAll(/<refname>([^<]+)<\/refname>/g)].map((m) => m[1]!.trim()).filter((a) => a !== name);
+    pages.push({ name, volume, purpose, aliases });
+  }
+  return { systemd_version: version, generated_by: "migration-planner/scripts/build-catalog.ts", pages };
+}
+
 function count(c: Catalog): number {
   let n = 0;
   for (const p of Object.values(c.pages)) for (const s of Object.values(p.sections)) n += Object.keys(s).length;
@@ -229,14 +272,16 @@ if (import.meta.main) {
   let manDir = join(tree, "man");
   let versionFile = join(tree, "meson.version");
   let out = resolve(here, "..", "..", "..", "contract", "directives.json");
+  let surfaceOut = resolve(here, "..", "..", "..", "contract", "surface.json");
   const args = process.argv.slice(2);
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
     if (a === "--man") manDir = resolve(args[++i]!);
     else if (a === "--version") versionFile = resolve(args[++i]!);
     else if (a === "-o" || a === "--output") out = resolve(args[++i]!);
+    else if (a === "--surface") surfaceOut = resolve(args[++i]!);
     else if (a === "-h" || a === "--help") {
-      console.log("usage: build-catalog.ts [--man DIR] [--version FILE] [-o FILE]");
+      console.log("usage: build-catalog.ts [--man DIR] [--version FILE] [-o FILE] [--surface FILE]");
       process.exit(0);
     } else {
       console.error(`unknown argument: ${a}`);
@@ -251,4 +296,7 @@ if (import.meta.main) {
   const catalog = buildCatalog(manDir, version);
   writeFileSync(out, JSON.stringify(catalog, null, 1) + "\n");
   console.log(`wrote ${out}: ${Object.keys(catalog.pages).length} pages, ${count(catalog)} entries, systemd ${version}`);
+  const surface = buildSurface(manDir, version);
+  writeFileSync(surfaceOut, JSON.stringify(surface, null, 1) + "\n");
+  console.log(`wrote ${surfaceOut}: ${surface.pages.length} surface pages`);
 }
