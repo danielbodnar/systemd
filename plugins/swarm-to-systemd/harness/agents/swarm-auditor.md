@@ -6,11 +6,30 @@ model:
   effort: high
 tools:
   - type: agent_toolset_20260401
+    # Nothing is approved by default, the same as the other agents: the auditor
+    # reads untrusted cluster data, so every command and file write pauses and
+    # the operator's approval policy decides. Read-only tools are allowed
+    # because the worker confines them to the workspace.
     default_config:
       enabled: true
       permission_policy:
-        type: auto
+        type: always_ask
     configs:
+      - name: read
+        permission_policy:
+          type: always_allow
+      - name: glob
+        permission_policy:
+          type: always_allow
+      - name: grep
+        permission_policy:
+          type: always_allow
+      - name: bash
+        permission_policy:
+          type: always_ask
+      - name: write
+        permission_policy:
+          type: always_ask
       - name: edit
         enabled: false
       - name: web_search
