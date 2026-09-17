@@ -9,6 +9,7 @@
 
 import type { Component, DecisionSpec, PlanContext, RenderContext, ServiceShape } from "../../../contract/component.ts";
 import { instanceKey } from "../../../contract/component.ts";
+import { type MachineShape, machineKey } from "../../systemd-machined/scripts/component.ts";
 import { shellQuote } from "../../../contract/unit.ts";
 
 export function storeId(secret: string): string {
@@ -86,6 +87,13 @@ export const credsComponent: Component = {
         u.add("Service", "BindReadOnlyPaths", `%d/${s.name}:${target}`);
         if (s.uid !== "0" || s.gid !== "0") ctx.note(`${svc.name}: secret ${s.name} was owned by ${s.uid}:${s.gid} in the container; credentials are readable by the service user only, which is what the mode asked for`);
       }
+    }
+    // Machines load their credentials through the nspawn drop-in the machined
+    // component writes; the import script on this host must cover them too.
+    for (const inst of ctx.instances) {
+      if (inst.form !== "machine") continue;
+      const machine = ctx.get<MachineShape>(machineKey(inst.base));
+      for (const c of machine?.credentials ?? []) toImport.set(c.name, c.store);
     }
     const names = [...toImport.keys()].sort();
     if (names.length) ctx.file("secrets/import-credentials.sh", importScript(ctx.rendererName, names, toImport));
