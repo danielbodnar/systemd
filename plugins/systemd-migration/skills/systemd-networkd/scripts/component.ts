@@ -69,6 +69,62 @@ export interface Lease {
   mac: string;
 }
 
+/** The ingress decision of a published port: where the port exists (PLAN.md 10.2). */
+export function ingressId(service: string, port: number, protocol: string): string {
+  return `networkd.ingress.${service}.${port}-${protocol}`;
+}
+/** The service's virtual address when a load-balancing option anchors one. */
+export function vipId(service: string): string {
+  return `networkd.vip.${service}`;
+}
+/** The range service virtual addresses are taken from. */
+export const VIP_RANGE = "networkd.vip.range.estate";
+/** The key under which this component publishes the backends of every published port for the adapters (haproxy-ingress). */
+export const BACKENDS = "networkd:backends";
+
+/** One instance a published port can be forwarded to, as the load-balancing options and the HAProxy adapter see it. */
+export interface Backend {
+  service: string;
+  /** The instance's unit base (`web_app`, `web_app-2`). */
+  base: string;
+  host: string;
+  /** The address the instance answers on: a machine's lease, or the host's address for a plain service. */
+  address: string;
+  /** The port the instance itself listens on (offset for numbered instances on one host). */
+  port: number;
+  protocol: string;
+  /** Whether the instance sits on this host (`local`) or is reached over the transport. */
+  scope: "local" | "remote";
+}
+
+/**
+ * The backends of a service's published port as seen from `host`: every
+ * instance the plan places, on this host and on the others. Reads the lease
+ * table for machines and the plan's host addresses for plain services. The
+ * networkd stream refines this (ingress decision, VIPs); adapters call it.
+ */
+export function backendsOf(ctx: RenderContext, service: Service, port: { target: number; published: number | null; protocol: string }, host: string): Backend[] {
+  const leases = ctx.get<Lease[]>(LEASES) ?? [];
+  const placed = ctx.plan.decisions.find((d) => d.id === `placement.hosts.${service.name}`);
+  const chosen = String(placed?.chosen ?? placed?.default ?? "");
+  const hosts = chosen ? chosen.split(",").map((h) => h.trim()).filter(Boolean) : [host];
+  const out: Backend[] = [];
+  for (const h of hosts) {
+    const addr = ctx.plan.hosts[h]?.addresses?.[0] ?? ctx.inventory.nodes.find((n) => n.hostname === h)?.addr ?? null;
+    const instances = ctx.instances.filter((i) => i.service.name === service.name && ctx.host === h);
+    const count = Math.max(1, instances.length || 1);
+    for (let index = 1; index <= count; index++) {
+      const base = index === 1 ? service.name : `${service.name}-${index}`;
+      const lease = leases.find((l) => l.host === h && l.base === base);
+      const address = lease?.address ?? addr;
+      if (!address) continue;
+      const published = port.published ?? port.target;
+      out.push({ service: service.name, base, host: h, address, port: lease ? port.target : count > 1 ? published + (index - 1) : published, protocol: port.protocol, scope: h === host ? "local" : "remote" });
+    }
+  }
+  return out;
+}
+
 /** The transports that build an L2 domain across hosts; the others route each host's slice. */
 const L2_TRANSPORTS = new Set(["vxlan", "vxlan-wireguard"]);
 const WIREGUARD_TRANSPORTS = new Set(["wireguard", "vxlan-wireguard"]);
