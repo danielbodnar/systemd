@@ -8,9 +8,12 @@
 #
 # IMAGES.json is written by docker-image-to-service/scripts/render.ts: an
 # object keyed by local image name with ref, digest, and hosts. Images whose
-# mount stack already exists are skipped. The digest printed after each pull
-# is for the operator to compare with the one the inventory recorded, since
-# pull-oci pulls by reference.
+# mount stack already exists are skipped. When the inventory recorded a
+# digest the image is pulled by that immutable reference (REPOSITORY@sha256:
+# ...), never by the tag, so a re-pushed tag or a tampering registry cannot
+# substitute content; an image without a digest is pulled by tag and said so.
+# importctl itself verifies nothing beyond the TLS session, which is why the
+# pin lives in the reference.
 
 set -euo pipefail
 
@@ -53,10 +56,27 @@ flags=(--class="$class")
 [ "$read_only" -eq 1 ] && flags+=(--read-only)
 [ "$user" -eq 1 ] && flags+=(--user)
 
+# immutable_ref REF DIGEST: the reference to pull. With a digest the tag is
+# replaced by @DIGEST, so the registry can only serve the content the swarm
+# ran; a tag alone is mutable and the caller is told so. A colon inside the
+# last path component is a tag; one before it is a registry port.
+immutable_ref() {
+    local ref="$1" digest="$2" repo
+    [ -n "$digest" ] || { printf '%s\n' "$ref"; return; }
+    repo="${ref%%@*}"
+    case "${repo##*/}" in
+        *:*) repo="${repo%:*}" ;;
+    esac
+    printf '%s@%s\n' "$repo" "$digest"
+}
+
 pulled=0
 skipped=0
 failed=0
 while IFS=$'\t' read -r name ref digest hosts; do
+    # jq writes "-" for a missing digest: read collapses adjacent tabs, so an
+    # empty field would shift the hosts column into $digest.
+    [ "$digest" != "-" ] || digest=""
     if [ -n "$host" ] && ! grep -F -x -q -- "$host" <<< "${hosts//,/$'\n'}"; then
         continue
     fi
@@ -65,18 +85,24 @@ while IFS=$'\t' read -r name ref digest hosts; do
         skipped=$((skipped + 1))
         continue
     fi
-    echo "pull  $name <- $ref${digest:+ (inventory digest $digest)}"
+    pull_ref="$(immutable_ref "$ref" "$digest")"
+    if [ -n "$digest" ]; then
+        echo "pull  $name <- $pull_ref (pinned; the inventory saw $ref)"
+    else
+        echo "pull  $name <- $ref (no digest in the inventory; the tag is mutable)"
+    fi
     if [ "$dry_run" -eq 1 ]; then
-        echo "      importctl ${flags[*]} pull-oci $ref $name"
+        echo "      importctl ${flags[*]} pull-oci $pull_ref $name"
         continue
     fi
-    if importctl "${flags[@]}" pull-oci "$ref" "$name"; then
+    if importctl "${flags[@]}" pull-oci "$pull_ref" "$name" && [ -d "$dir/$name.mstack" ]; then
         pulled=$((pulled + 1))
     else
-        echo "fail  $name: importctl pull-oci returned $?" >&2
+        echo "fail  $name: importctl pull-oci $pull_ref did not produce $dir/$name.mstack" >&2
+        rm -rf "$dir/$name.mstack"
         failed=$((failed + 1))
     fi
-done < <(jq -r 'to_entries[] | [.key, .value.ref, (.value.digest // ""), (.value.hosts | join(","))] | @tsv' "$images")
+done < <(jq -r 'to_entries[] | [.key, .value.ref, (.value.digest // "-"), (.value.hosts | join(","))] | @tsv' "$images")
 
 if [ "$dry_run" -eq 0 ]; then
     importctl "${flags[@]}" list-images || true

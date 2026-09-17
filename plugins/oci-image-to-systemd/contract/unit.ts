@@ -101,7 +101,7 @@ export function isPlainName(value: string): boolean {
 
 /** Whether an installation directory is an absolute path made of plain characters. */
 export function isPlainPath(value: string): boolean {
-  return /^\/[A-Za-z0-9._\/-]+$/.test(value) && !value.includes("/..") && !value.includes("//");
+  return /^\/[A-Za-z0-9._/-]+$/.test(value) && !value.includes("/..") && !value.includes("//");
 }
 
 /** Escape a path the way systemd-escape --path does, for mount unit names. */
