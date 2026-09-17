@@ -1,5 +1,4 @@
-systemd-analyze verify swarm-agent-tools.service swarm-agent-worker.service || true
-echo "installed. start with: systemctl enable --now swarm-agent-tools.service swarm-agent-worker.service"#!/usr/bin/env bash
+#!/usr/bin/env bash
 # SPDX-License-Identifier: LGPL-2.1-or-later
 #
 # Install the swarm-agent worker on a production host.
@@ -80,6 +79,6 @@ sed "s#/opt/swarm-agent/harness#$prefix/harness#; s#/usr/local/bin/bun#$bun_bin#
     "$source_dir/systemd/swarm-agent-tools.service" > /etc/systemd/system/swarm-agent-tools.service
 install -m 0644 "$source_dir/systemd/swarm-agent.slice" /etc/systemd/system/swarm-agent.slice
 systemctl daemon-reload
-systemd-analyze verify swarm-agent-worker.service || true
-echo "installed. start with: systemctl enable --now swarm-agent-worker.service"
+systemd-analyze verify swarm-agent-tools.service swarm-agent-worker.service || true
+echo "installed. start with: systemctl enable --now swarm-agent-tools.service swarm-agent-worker.service"
 echo "check with:            $bun_bin run $prefix/harness/src/cli.ts doctor --host --config /etc/swarm-agent/swarm-agent.yaml"
