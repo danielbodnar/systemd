@@ -12,7 +12,7 @@ inventory:
   networks: 4
   nodes: 2
 summary: 
-  decisions: 52
+  decisions: 54
   unresolved: 0
   defaulted: 0
 hosts: 
@@ -1096,4 +1096,44 @@ decisions:
       - "configs[web_caddyfile] used by web_proxy"
     default: /etc/containers/swarm-configs
     chosen: /etc/containers/swarm-configs
+    reason: "accepted the planner's default"
+  - id: generator.stacks.estate
+    component: generator
+    kind: choice
+    subject: 
+      kind: estate
+      name: estate
+    question: "How do the stack targets and slices reach the host: rendered unit files, or a generator reading a declarative stack description at boot?"
+    options: 
+      - value: static
+        label: rendered unit files
+        consequence: "<stack>.target and stack-<stack>.slice are files under /etc/systemd/system, installed by install.sh"
+      - value: generator
+        label: systemd-migration-generator
+        consequence: "install.sh writes /etc/systemd-migration/stacks.d/<stack>.conf and the generator emits the targets, slices, and Wants= into the early generator directory on every daemon-reload; edits to the description need no re-render"
+    evidence: 
+      - "stacks[data]"
+      - "stacks[web]"
+    default: static
+    chosen: static
+    reason: "accepted the planner's default"
+  - id: generator.preset.estate
+    component: generator
+    kind: choice
+    subject: 
+      kind: estate
+      name: estate
+    question: Is the enable state of the rendered units decided by a preset file?
+    options: 
+      - value: "no"
+        label: install.sh enables the stack targets
+        consequence: systemctl enable <stack>.target per stack in install.sh; nothing else is enabled
+      - value: "yes"
+        label: a preset file
+        consequence: /usr/lib/systemd/system-preset/80-systemd-migration.preset enables the stack targets and disables what the estate does not run; install.sh runs systemctl preset-all on the rendered units
+    evidence: 
+      - "stacks[data]"
+      - "stacks[web]"
+    default: "no"
+    chosen: "no"
     reason: "accepted the planner's default"

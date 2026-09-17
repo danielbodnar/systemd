@@ -407,6 +407,9 @@ and the integration subtests passing under
    against `rendered/forms`, a third committed tree from `plan-forms.yaml`.
    `.portable.sh`, `.capsule.sh`, and `.vmspawn.sh` wait on the portable
    component rendering an attachable image and on a bootable fixture image.
+10. **Swarm parity.** Section 10: load balancing and the ingress mesh, every
+    interface kind, generators and presets, rollouts and drain, the service
+    semantics audit.
 
 ## 8. Decisions taken
 
@@ -447,3 +450,182 @@ The first pull request (`claude/swarm-to-systemd-agent-gcqvex`) carries the
 first generation: the four source-named plugins, the directive catalogue, the
 translation map, the fixture estate, the native service renderer, and the
 harness. Everything there is kept; this branch reorganizes and extends it.
+
+## 10. Feature parity with a multi-node Docker Swarm
+
+Sections 1 to 9 built the composition layer and one component per systemd
+area. This section records what a Swarm cluster does that the rendered estate
+does not yet, and the design each gap gets. The rule from section 2 holds:
+every mechanism is a decision in `plan.yaml` with the source's values as
+evidence, chosen at review time, never a constant. Where systemd has a
+declarative primitive it is the first option; where it has none, the
+alternative is an adapter target listed under `adapters` in
+`contract/coverage.json`, like Quadlet.
+
+### 10.1 Parity matrix
+
+| Swarm | systemd today | Gap and design |
+|---|---|---|
+| Overlay network, encrypted overlay | zone bridge per network; VXLAN, VXLAN over WireGuard, routed WireGuard, underlay | Every tunnel kind `systemd.netdev(5)` documents joins the transport decision (10.5). |
+| macvlan and ipvlan networks | rendered on the decided parent | Done. |
+| Host networking | `Private=no`, host binds | Done. |
+| Service VIP (`endpoint_mode: vip`), same-node and cross-node replicas | none; published ports offset per instance | The publish decision gains load-balancing options (10.2). |
+| Ingress routing mesh (every node accepts a published port) | none | An ingress decision per published port: on every host or on placement hosts only (10.2). |
+| `endpoint_mode: dnsrr` | hosts fragment, DNS-SD, site DNS | Done; a machine's lease or a host address per replica. |
+| Service discovery by name and alias | resolved component | Done. |
+| Replicated and global mode, placement constraints and platforms | `contract/placement.ts` | Placement preferences (spread over a label) and `max_replicas_per_node` are not honoured (10.6). |
+| Replicated and global jobs | rendered as services with a note | Oneshot services and, for scheduled jobs, timers (10.6). |
+| Rolling update (`update_config`), rollback (`rollback_config`), `docker stack deploy` re-apply | notes in the rendered tree | A per-host controller and a rollout specification (10.4). |
+| Node drain, `docker node update --availability` | none | The controller's `drain` and `activate` verbs (10.4). |
+| Restart policy (condition, delay, max attempts, window) | `Restart=`, `RestartSec=`, `StartLimitBurst=`, `StartLimitIntervalSec=` | Audit every field maps (10.6). |
+| Healthcheck-driven restart | health timer, restart unit | Done; the rollout controller also reads the health result (10.4). |
+| Resource limits and reservations | `CPUQuota=`, `MemoryMax=`, `MemoryLow=`, `TasksMax=`, `CPUWeight=`, slices | Done. |
+| Secrets and configs, rotation | credentials, plain files or confext; import script | Rotation is a controller verb: re-encrypt, `confext refresh`, restart in rollout order (10.4). |
+| Logging driver and options | journal, `LogNamespace=`, `LogExtraFields=` | Done. |
+| Stack grouping, `docker stack rm` | `<stack>.target`, `stack-<stack>.slice` | Grouping units optionally emitted by a generator; presets decide enable state (10.3). |
+| Node labels, engine labels | placement evidence | Done. |
+| Swarm control plane TLS, node join tokens | not applicable | Hosts are not a cluster; the operator's ssh reaches them (the probe). |
+
+### 10.2 Load balancing and the ingress mesh
+
+Swarm balances in two places: the service VIP (IPVS across the tasks of a
+service, reachable from any container on the network) and the ingress mesh
+(every node's published port forwards to a task somewhere). Neither is one
+systemd primitive, so the publish decision `networkd.publish.<service>.<port>`
+grows from four options to a list the user chooses from at review time, each
+with its requirements from the probe:
+
+- `host`: the service binds the port on its host (today's default).
+- `socket`: a `.socket` unit owns the port and passes it in (today).
+- `reuseport`: one `.socket` per instance on this host with `ReusePort=yes`; the
+  kernel spreads connections across the instances. Only for services that
+  accept an inherited socket.
+- `socket-proxyd`: one `.socket` per backend with `ReusePort=yes`, each
+  activating a `systemd-socket-proxyd@` instance that forwards to that
+  backend's address and port. Backends are the instances on this host and,
+  when the ingress decision says every host, the instances on the other
+  hosts over the transport. Kernel-level spread across backends, no third
+  party, works for machines and plain services alike; a dead remote backend
+  costs the connections hashed to it until its socket is stopped, which the
+  rollout controller does when it drains a host.
+- `multipath`: an address per service (its VIP) on a `dummy` netdev on every
+  host, routed through a `[NextHop]` group (`Group=` with weights) or a
+  `MultiPathRoute=` over the backends' addresses (machines on their leases,
+  hosts on their bridge addresses). Layer 3, per flow, declarative in
+  `.network` files; the closest thing to IPVS that networkd renders itself.
+- `haproxy`: a hardened `haproxy.service` per host rendered by the
+  `haproxy-ingress` adapter component from the backends and the source's
+  healthcheck, listening on the published port (and on the VIP when the
+  multipath decision anchors one), with `ExecReload=` for reloads and the
+  configuration as a rendered file under `/etc/haproxy/`. HAProxy is the
+  option when a proxy with health checks and layer 7 behaviour is wanted;
+  it requires the `haproxy` tool on the host and is an adapter target, not a
+  systemd page.
+- `external-lb`, `dns-rr`: as today.
+
+A second decision per published port, `networkd.ingress.<service>.<port>`,
+selects `placement-hosts` (the port exists where the service runs) or
+`every-host` (the port exists on every host in the plan, forwarding to the
+placement hosts), which is the mesh. The `socket-proxyd`, `multipath`, and
+`haproxy` options honour it; `host` and `socket` cannot and say so.
+
+Backends come from the same lease table the networkd component publishes
+under `networkd:leases` and from the host addresses in the plan. When an
+option needs a VIP the networkd component raises `networkd.vip.<service>` (a
+value with `format: ipv4`, defaulting to an address from a decided VIP range
+`networkd.vip.range.estate`).
+
+### 10.3 Generators and presets
+
+`generator.stacks.estate` chooses between rendered grouping units (today) and
+`systemd-migration-generator`, a POSIX sh generator this plugin ships under
+`skills/systemd-generator/scripts/` and installs to
+`/usr/lib/systemd/system-generators/`. `install.sh` writes one
+`/etc/systemd-migration/stacks.d/<stack>.conf` per stack (an `.ini` with the
+stack's units, slice settings, and `WantedBy=`); on every boot and
+`daemon-reload` the generator emits `<stack>.target`, `stack-<stack>.slice`,
+and the `Wants=` symlinks into the early generator directory, so the host
+carries no generated grouping units under `/etc/systemd/system` and an
+operator edits the description rather than re-rendering. The service and
+resource-control components already skip the target and slice files when the
+generator is chosen.
+
+`generator.preset.estate` chooses whether
+`/usr/lib/systemd/system-preset/80-systemd-migration.preset` decides the
+enable state (`enable <stack>.target`, `disable` for units the estate stopped
+running) and `install.sh` runs `systemctl preset-all` over the rendered units,
+instead of `systemctl enable` per target.
+
+### 10.4 Rollouts, rollback, and drain
+
+`systemd-rollout` renders, per host, a rollout specification per stack
+(`/etc/systemd-migration/rollout/<stack>.conf`: per service, `parallelism`,
+`delay`, `order` (`start-first` or `stop-first`), `failure_action` (`pause`,
+`continue`, `rollback`), `monitor`, `max_failure_ratio`, from the source's
+`update_config` and `rollback_config`) and one POSIX sh controller,
+`/usr/local/lib/systemd-migration/stackctl`, whose verbs are:
+
+- `deploy <stack> [--image NAME=REF]`: pull the new image under a new
+  versioned directory (`systemd.v(7)`), then restart the service's instances
+  in the specified order and batches, waiting `delay` between batches and
+  reading the health unit's result during `monitor`; on failure apply
+  `failure_action`.
+- `rollback <stack> [service]`: the same walk with the previous version.
+- `drain <host>` and `activate <host>`: stop the host's instances in rollout
+  order and stop the sockets or proxies that point at them (10.2), or start
+  them again.
+- `scale <service> <n>`: change the instance count on this host within the
+  plan's placement.
+- `rotate <credential|config>`: re-encrypt or refresh, then restart the
+  consumers in rollout order.
+- `status <stack>`: instances, versions, health results.
+
+The controller uses `systemctl`, `systemd-run` for the monitor timer, and the
+versioned image directories; it needs no Bun. The harness gains a `rollout`
+task and the approval policy allows the controller's read verbs and asks for
+the rest. `/migrate-rollout` drives it.
+
+### 10.5 Every interface kind
+
+The transport decision offers every tunnel kind `systemd.netdev(5)` documents
+that can carry the network between hosts: `vxlan` (with and without
+WireGuard), `geneve`, `gre`, `gretap`, `ip6gre`, `ip6gretap`, `erspan`, `ipip`,
+`sit`, `ip6tnl`, `vti`, `vti6`, `xfrm`, `l2tp`, `bareudp`, `fou` encapsulation,
+`macsec` on a shared segment, and `wireguard`; each with the values it needs
+raised as decisions (`Local=`, `Remote=`, keys as credentials, identifiers)
+and the version the catalogue gives it. `dummy` anchors service VIPs. `tun`
+and `tap` serve the VM form. Kinds that own a physical link (`bond`, `vlan`,
+`vrf`, a bridge over a NIC) are rendered only when the plan's uplink decision
+says the harness owns that host's uplink; otherwise the uplink stays the
+site's. Traffic control sections (`[QDisc]` and the shapers) are out of scope
+for parity because Swarm has none.
+
+### 10.6 Service semantics
+
+The service component audits every source field against the catalogue:
+restart policy conditions map to `Restart=` values with `RestartSec=`,
+`StartLimitBurst=`, and `StartLimitIntervalSec=` from the window; jobs become
+`Type=oneshot` with `RemainAfterExit=no` and, when the source ran them on a
+schedule, timers; `stop_grace_period` becomes `TimeoutStopSec=`; `stop_signal`
+becomes `KillSignal=`; `init` becomes an `ExecStart=` through a documented
+init when the image has one and a note otherwise; placement preferences
+spread instances over the label's values and `max_replicas_per_node` caps the
+scale-out. `endpoint_mode` selects the load-balancing default in 10.2.
+
+### 10.7 Work streams
+
+Five streams, disjoint by file, each ending with the harness suite green,
+the fixture drift check clean, and a TEST-95 subtest where the mechanism can
+run on the booted image:
+
+1. `systemd-networkd`: 10.5 and the networkd side of 10.2 (`reuseport`,
+   `socket-proxyd`, `multipath`, the ingress and VIP decisions, backends from
+   leases).
+2. `haproxy-ingress`: the adapter component reading the `haproxy` publish
+   decisions, the rendered configuration and unit, health checks from the
+   source healthcheck, `.haproxy.sh` (skips without the binary).
+3. `systemd-generator`: 10.3, the generator script, the preset file, the
+   `stacks.d` description, `.generator.sh`.
+4. `systemd-rollout`: 10.4, the controller, the specification, the harness
+   task, the command, `.rollout.sh` over the committed native tree.
+5. `systemd-service` and `contract/placement.ts`: 10.6.

@@ -1,12 +1,12 @@
 {
   "description": "Which skill claims which page of the systemd surface (contract/surface.json), beyond the pages the components claim in their own `covers` lists, and which pages are not applicable to a container migration with the reason. The harness coverage test fails when a surface page is unclaimed, claimed twice, or claimed under a name the surface does not have. `adapters` lists the registered components that are adapter targets for another runtime (Quadlet is Podman's interface, not a systemd page) and so may claim no page.",
   "skills": {
-    "systemd-verify": ["systemd-analyze", "systemctl", "systemd-delta"],
+    "systemd-verify": ["systemd-analyze", "systemd-delta"],
     "discover-systemd-hosts": ["systemd-detect-virt", "systemd-id128", "systemd-path"],
-    "migration-planner": ["systemd.offline-updates", "systemd-run", "systemd-run-generator", "daemon"],
+    "migration-planner": ["daemon"],
     "podman-quadlet": []
   },
-  "adapters": ["quadlet"],
+  "adapters": ["quadlet", "haproxy"],
   "not_applicable": {
     "boot, firmware, measured boot, and disk encryption: a container estate has no equivalent, the target hosts are installed before the migration": [
       "bootctl", "systemd-boot", "systemd-stub", "bootup", "loader.conf", "kernel-install", "kernel-command-line", "ukify",
@@ -24,7 +24,7 @@
       "systemd-system-update-generator", "systemd-sysupdate", "systemd-sysupdated.service", "sysupdate.d", "sysupdate.components", "sysupdate.features",
       "updatectl", "clonetab", "systemd-clonesetup", "systemd-clonesetup-generator", "systemd-report", "systemd-report-files@.service",
       "systemd-report-sign-plain@.service", "systemd-report-sign-tpm2@.service", "systemd-report-sign-tsm@.service", "systemd-imds", "systemd-imds-generator",
-      "systemd-imdsd@.service", "systemd-ssh-generator", "systemd-ssh-issue", "systemd-ssh-proxy", "systemd.preset", "systemd-machine-id-setup",
+      "systemd-imdsd@.service", "systemd-ssh-generator", "systemd-ssh-issue", "systemd-ssh-proxy", "systemd-machine-id-setup",
       "systemd-machine-id-commit.service", "machine-id", "hostname", "hostnamectl", "systemd-hostnamed.service", "systemd-storagetm.service"
     ],
     "hardware, devices, and the console: managed by the host, not by the migrated workloads": [
@@ -41,7 +41,7 @@
       "systemd-pty-forward", "environment.d", "systemd-environment-d-generator", "systemd.environment-generator"
     ],
     "the manager and its IPC: used by every unit the components render, nothing to translate": [
-      "systemd", "systemd.generator", "systemd-debug-generator", "busctl", "varlinkctl"
+      "systemd", "systemd-debug-generator", "busctl", "varlinkctl"
     ]
   }
 }

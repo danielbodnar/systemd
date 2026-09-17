@@ -4,6 +4,7 @@
 // limits and reservations become control group properties on its unit.
 
 import type { Component, DecisionSpec, PlanContext, RenderContext, ServiceShape } from "../../../contract/component.ts";
+import { materializedByGenerator } from "../../systemd-generator/scripts/component.ts";
 import { instanceKey } from "../../../contract/component.ts";
 import { bytes, cpuQuota } from "../../../contract/unit.ts";
 
@@ -48,6 +49,8 @@ export const resourceControlComponent: Component = {
       u.add("Service", "TasksMax", svc.resources.limits.pids ?? null);
       if (svc.resources.reservations.nano_cpus) u.add("Service", "CPUWeight", Math.min(10000, Math.max(1, Math.round(svc.resources.reservations.nano_cpus / 10_000_000))));
     }
+    // The slices are grouping units; the generator emits them when the plan chose it.
+    if (materializedByGenerator(ctx)) return;
     for (const stack of [...stacks].sort()) {
       const s = ctx.unit(`stack-${stack}.slice`, [`Rendered by ${ctx.rendererName}: resource group of stack ${stack} on ${ctx.host}`]);
       s.add("Unit", "Description", `stack ${stack} slice`);

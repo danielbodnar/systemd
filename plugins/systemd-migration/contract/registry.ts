@@ -19,6 +19,9 @@ import { journaldComponent } from "../skills/systemd-journald/scripts/component.
 import { sysextComponent } from "../skills/systemd-sysext/scripts/component.ts";
 import { portableComponent } from "../skills/systemd-portable/scripts/component.ts";
 import { quadletComponent } from "../skills/podman-quadlet/scripts/component.ts";
+import { generatorComponent } from "../skills/systemd-generator/scripts/component.ts";
+import { rolloutComponent } from "../skills/systemd-rollout/scripts/component.ts";
+import { haproxyComponent } from "../skills/haproxy-ingress/scripts/component.ts";
 
 export const COMPONENTS: Component[] = [
   machinedComponent,
@@ -32,6 +35,9 @@ export const COMPONENTS: Component[] = [
   sysextComponent,
   portableComponent,
   quadletComponent,
+  generatorComponent,
+  rolloutComponent,
+  haproxyComponent,
 ];
 
 export function componentById(id: string): Component | undefined {

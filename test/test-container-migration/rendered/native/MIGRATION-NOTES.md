@@ -1,6 +1,6 @@
 # Migration notes
 
-Rendered by systemd-migration from an inventory captured 2026-09-01T12:00:00Z (4 services, 2 nodes) against a plan of 52 decisions (4 chosen). Components composed, in order: machined, service, creds, resource-control, storage, networkd, resolved, journald, sysext, portable, quadlet.
+Rendered by systemd-migration from an inventory captured 2026-09-01T12:00:00Z (4 services, 2 nodes) against a plan of 54 decisions (4 chosen). Components composed, in order: machined, service, creds, resource-control, storage, networkd, resolved, journald, sysext, portable, quadlet, generator, rollout, haproxy.
 
 ## Host plan
 

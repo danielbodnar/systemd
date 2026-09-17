@@ -13,6 +13,7 @@ import type { Component, DecisionSpec, PlanContext, RenderContext, ServiceShape 
 import { instanceKey } from "../../../contract/component.ts";
 import { durationToSeconds, type ImageConfig, type Service } from "../../../contract/types.ts";
 import { fileOwnership, healthCommand, quote } from "../../../contract/unit.ts";
+import { materializedByGenerator } from "../../systemd-generator/scripts/component.ts";
 
 /** Docker's default capability set, for services that neither add nor drop anything. */
 export const DOCKER_DEFAULT_CAPS = [
@@ -293,7 +294,10 @@ export const serviceComponent: Component = {
   },
 
   finish(ctx: RenderContext): void {
-    // Stack targets group every unit the components registered for the stack on this host.
+    // Stack targets group every unit the components registered for the stack
+    // on this host; when the generator materializes them, it reads the same
+    // list from the stack description the generator component writes.
+    if (materializedByGenerator(ctx)) return;
     for (const [stack, units] of ctx.stacks()) {
       const t = ctx.unit(`${stack}.target`, [`Rendered by ${ctx.rendererName}: groups the units of stack ${stack} on ${ctx.host}`]);
       t.add("Unit", "Description", `stack ${stack}`);
