@@ -13,6 +13,7 @@ import { connect } from "./commands/connect.ts";
 import { doctor } from "./commands/doctor.ts";
 import { run } from "./commands/run.ts";
 import { status } from "./commands/status.ts";
+import { tools } from "./commands/tools.ts";
 import { worker } from "./commands/worker.ts";
 import { TASKS } from "./tasks.ts";
 
@@ -27,6 +28,7 @@ Commands
              --no-rubric  --no-memory  --non-interactive  --approve-all
   worker     run the self-hosted sandbox worker on this host (long-polls the work queue)
              --once   handle one already-claimed work item (for \`ant beta:worker poll --on-work\`)
+  tools      run the tool executor on this host (separate user, no credentials; the worker connects to it)
   status     list this harness's sessions      --limit N  --queue
   connect    attach a terminal to a session    <session-id>  --web
   doctor     preflight checks                  --host (check a worker host instead of an operator machine)
@@ -91,6 +93,8 @@ async function main(argv: string[]): Promise<number> {
       });
     case "worker":
       return worker(cfg, { once: values.once });
+    case "tools":
+      return tools(cfg);
     case "status":
       return status(cfg, { limit: values.limit ? Number(values.limit) : undefined, queue: values.queue });
     case "doctor":

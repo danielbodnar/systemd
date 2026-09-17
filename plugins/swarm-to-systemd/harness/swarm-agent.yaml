@@ -28,6 +28,9 @@ worker:
   memory_sync_interval_ms: 15000
   # Idle timeout for a claimed session before the worker releases it.
   max_idle_ms: 900000
+  # Unix socket of the tool executor (swarm-agent-tools.service), the separate
+  # user that runs bash and the file tools without any credential.
+  tools_socket: /run/swarm-agent/tools.sock
   # Paths the file tools refuse, enforced on this host regardless of the
   # server-side permission policy. Regular expressions.
   denied_paths:

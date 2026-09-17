@@ -10,6 +10,7 @@ const WorkerSchema = z.object({
   read_only_roots: z.array(z.string()).default([]),
   memory_sync_interval_ms: z.number().int().min(5000).nullable().default(15000),
   max_idle_ms: z.number().int().positive().default(900_000),
+  tools_socket: z.string().default("/run/swarm-agent/tools.sock"),
   denied_paths: z.array(z.string()).default(["(^|/)secrets/values(/|$)", "^/etc/credstore", "^/run/credentials"]),
 });
 

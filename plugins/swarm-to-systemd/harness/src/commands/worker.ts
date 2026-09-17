@@ -1,19 +1,22 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //
 // Data plane on the production host: long-poll the self-hosted environment's
-// work queue and execute the agent's bash and file tools here. The worker
-// holds only the environment key (never an organization API key), confines the
-// file tools to the workspace plus the configured roots, and stops cleanly on
-// SIGTERM so memory stores flush before exit.
+// work queue and hand the agent's tool calls to the tool executor, a separate
+// process under a separate user that never sees a credential (see
+// tools/server.ts). This process holds only the environment key (never an
+// organization API key) and stops cleanly on SIGTERM so memory stores flush
+// before exit.
 
 import Anthropic from "@anthropic-ai/sdk";
 import { EnvironmentWorker } from "@anthropic-ai/sdk/helpers/beta/environments";
-import { betaAgentToolset20260401, type AgentToolContext } from "@anthropic-ai/sdk/tools/agent-toolset/node";
+import type { AgentToolContext } from "@anthropic-ai/sdk/tools/agent-toolset/node";
 import { existsSync, mkdirSync } from "node:fs";
 import type { Config } from "../config.ts";
 import { resolveFrom } from "../config.ts";
 import { readCredential } from "../credentials.ts";
 import { readLockfile, resolveResource } from "../lock.ts";
+import { notifySystemd } from "../notify.ts";
+import { remoteTools } from "../tools/client.ts";
 
 export function resolveEnvironmentId(cfg: Config): string {
   const fromEnv = process.env.ANTHROPIC_ENVIRONMENT_ID;
@@ -27,8 +30,8 @@ export function resolveEnvironmentId(cfg: Config): string {
 
 export async function worker(cfg: Config, opts: { once?: boolean }): Promise<number> {
   const environmentKey = readCredential("environment-key", "ANTHROPIC_ENVIRONMENT_KEY");
-  // Tool processes inherit this environment; drop the pointers to the key so
-  // a bash call cannot find it by name (the denied_paths guard covers the path).
+  // Nothing agent-controlled runs in this process, but keep its environment
+  // free of pointers to the key all the same.
   delete process.env.CREDENTIALS_DIRECTORY;
   delete process.env.ANTHROPIC_ENVIRONMENT_KEY;
   if (!environmentKey) {
@@ -40,8 +43,12 @@ export async function worker(cfg: Config, opts: { once?: boolean }): Promise<num
     return 2;
   }
   const environmentId = resolveEnvironmentId(cfg);
-  const { workdir, allowed_roots, read_only_roots, memory_sync_interval_ms, max_idle_ms } = cfg.worker;
+  const { workdir, allowed_roots, read_only_roots, memory_sync_interval_ms, max_idle_ms, tools_socket } = cfg.worker;
   mkdirSync(workdir, { recursive: true });
+  if (!existsSync(tools_socket)) {
+    console.error(`tool executor socket  is missing; start swarm-agent-tools.service first`);
+    return 2;
+  }
 
   const client = new Anthropic({ authToken: environmentKey });
   const controller = new AbortController();
@@ -52,10 +59,11 @@ export async function worker(cfg: Config, opts: { once?: boolean }): Promise<num
   process.once("SIGTERM", () => stop("SIGTERM"));
   process.once("SIGINT", () => stop("SIGINT"));
 
+  // The executor applies denied_paths itself; this side only forwards.
   const tools = (ctx: AgentToolContext) => {
     ctx.allowedRoots = [...(ctx.allowedRoots ?? []), ...allowed_roots];
     ctx.readOnlyRoots = [...(ctx.readOnlyRoots ?? []), ...read_only_roots];
-    return guardTools(betaAgentToolset20260401(ctx), cfg.worker.denied_paths);
+    return remoteTools(tools_socket, ctx);
   };
 
   const w = new EnvironmentWorker({
@@ -84,42 +92,5 @@ export async function worker(cfg: Config, opts: { once?: boolean }): Promise<num
   return 0;
 }
 
-/** Best-effort sd_notify over NOTIFY_SOCKET so Type=notify units see readiness. */
-function notifySystemd(state: string): void {
-  const sock = process.env.NOTIFY_SOCKET;
-  if (!sock) return;
-  try {
-    const proc = Bun.spawn(["systemd-notify", state], { stdout: "ignore", stderr: "ignore" });
-    void proc.exited;
-  } catch {
-    // systemd-notify absent; readiness falls back to Type=exec semantics.
-  }
-}
-
-const PATH_KEYS = ["path", "file_path", "pattern", "glob", "directory", "cwd"];
-
-/**
- * Wrap the file tools so any input path (or bash command text) that matches a
- * denied pattern is refused before execution. This runs on the worker host and
- * therefore applies regardless of the server-side permission policy, which is
- * what keeps `secrets/values` unreadable even for always_allow tools.
- */
-export function guardTools<T extends { name: string; run: (input: any, ...rest: any[]) => any }>(tools: T[], deniedPatterns: string[]): T[] {
-  if (deniedPatterns.length === 0) return tools;
-  const regexes = deniedPatterns.map((p) => new RegExp(p));
-  const offending = (input: Record<string, unknown>): string | null => {
-    const candidates: string[] = [];
-    for (const k of PATH_KEYS) if (typeof input[k] === "string") candidates.push(input[k] as string);
-    if (typeof input.command === "string") candidates.push(input.command, ...input.command.split(/\s+/));
-    for (const c of candidates) for (const re of regexes) if (re.test(c)) return c;
-    return null;
-  };
-  return tools.map((tool) => ({
-    ...tool,
-    run: (input: any, ...rest: any[]) => {
-      const hit = offending(input ?? {});
-      if (hit) throw new Error(`refused by worker policy: ${tool.name} may not touch ${hit}`);
-      return tool.run(input, ...rest);
-    },
-  }));
-}
+// The path guard lives with the executor now; re-exported so callers keep working.
+export { guardTools } from "../tools/guard.ts";

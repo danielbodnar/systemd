@@ -70,7 +70,9 @@ export async function doctor(cfg: Config, opts: { host?: boolean }): Promise<num
     if (process.env.ANTHROPIC_ENVIRONMENT_ID) ok(`environment id from ANTHROPIC_ENVIRONMENT_ID`);
     else if (existsSync(resolveFrom(cfg, cfg.lockfile))) ok("environment id resolvable from lockfile");
     else bad("environment id unknown: set ANTHROPIC_ENVIRONMENT_ID or ship the lockfile");
-    if (existsSync(cfg.worker.workdir)) ok(`workdir ${cfg.worker.workdir}`);
+    if (existsSync(cfg.worker.tools_socket)) ok(`tool executor socket `);
+    else warn(`tool executor socket  missing; is swarm-agent-tools.service running?`);
+    if (existsSync(cfg.worker.workdir)) ok(`workdir `);
     else warn(`workdir ${cfg.worker.workdir} does not exist yet; the worker creates it`);
     if (cfg.worker.memory_sync_interval_ms !== null) {
       if (existsSync("/mnt/memory")) ok("/mnt/memory present for memory stores");

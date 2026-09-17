@@ -6,9 +6,13 @@
 # user. It holds the environment key as a systemd credential and never an
 # organization API key.
 #
-# The worker holds no supplementary groups. In particular it is never a member
-# of the docker group: that membership is root-equivalent (docker run
-# --privileged -v /:/host) and would void every hardening directive below.
+# This process holds the environment key and nothing else agent-controlled
+# runs in it: every bash and file tool call is forwarded to
+# swarm-agent-tools.service, which runs as a different user with no credential,
+# so an approved command cannot read the key. The worker holds no supplementary
+# groups and is never a member of the docker group: that membership is
+# root-equivalent (docker run --privileged -v /:/host) and would void every
+# hardening directive below.
 # The auditor reaches the swarm through DOCKER_HOST in worker.env, pointed at
 # a read-only proxy in front of the manager socket, or the operator runs the
 # capture and drops the directory into the workspace. Rootful Podman and
@@ -22,8 +26,9 @@
 [Unit]
 Description=swarm-agent self-hosted sandbox worker
 Documentation=https://platform.claude.com/docs/en/managed-agents/self-hosted-sandboxes
-After=network-online.target
+After=network-online.target swarm-agent-tools.service
 Wants=network-online.target
+Requires=swarm-agent-tools.service
 StartLimitIntervalSec=300
 StartLimitBurst=5
 
@@ -40,13 +45,13 @@ EnvironmentFile=-/etc/swarm-agent/worker.env
 Environment=HOME=/var/lib/swarm-agent
 StateDirectory=swarm-agent
 LogsDirectory=swarm-agent
-UMask=0027
+UMask=0007
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
 ReadWritePaths=/var/lib/swarm-agent /mnt/memory
-# Bash runs inside this sandbox too: the host is read-only apart from the two
-# paths above, and the secret directories do not exist from its point of view.
+# The host is read-only apart from the two paths above, and the secret
+# directories do not exist from this process's point of view.
 InaccessiblePaths=-/etc/swarm-migration/secrets -/etc/credstore -/etc/credstore.encrypted
 PrivateTmp=yes
 PrivateDevices=yes

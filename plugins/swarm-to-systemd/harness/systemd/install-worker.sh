@@ -1,4 +1,5 @@
-#!/usr/bin/env bash
+systemd-analyze verify swarm-agent-tools.service swarm-agent-worker.service || true
+echo "installed. start with: systemctl enable --now swarm-agent-tools.service swarm-agent-worker.service"#!/usr/bin/env bash
 # SPDX-License-Identifier: LGPL-2.1-or-later
 #
 # Install the swarm-agent worker on a production host.
@@ -35,7 +36,10 @@ echo "installing harness from $source_dir to $prefix/harness"
 install -m 0644 "$source_dir/systemd/swarm-agent.sysusers.conf" /etc/sysusers.d/swarm-agent.conf
 systemd-sysusers /etc/sysusers.d/swarm-agent.conf
 install -d -m 0755 "$prefix" /etc/swarm-agent /etc/credstore.encrypted
-install -d -m 0750 -o swarm-agent -g swarm-agent /var/lib/swarm-agent /var/lib/swarm-agent/workspace /mnt/memory
+install -d -m 0750 -o swarm-agent -g swarm-agent /var/lib/swarm-agent
+# The workspace and memory mounts are shared between the worker and the tool
+# executor through the group; setgid keeps new files in that group.
+install -d -m 2770 -o swarm-agent -g swarm-agent /var/lib/swarm-agent/workspace /mnt/memory
 install -d -m 0700 /etc/swarm-migration/secrets
 if [ -S /var/run/docker.sock ]; then
     echo "note: swarm-agent is deliberately not in the docker group (that is root-equivalent);"
@@ -72,6 +76,8 @@ fi
 
 sed "s#/opt/swarm-agent/harness#$prefix/harness#; s#/usr/local/bin/bun#$bun_bin#" \
     "$source_dir/systemd/swarm-agent-worker.service" > /etc/systemd/system/swarm-agent-worker.service
+sed "s#/opt/swarm-agent/harness#$prefix/harness#; s#/usr/local/bin/bun#$bun_bin#" \
+    "$source_dir/systemd/swarm-agent-tools.service" > /etc/systemd/system/swarm-agent-tools.service
 install -m 0644 "$source_dir/systemd/swarm-agent.slice" /etc/systemd/system/swarm-agent.slice
 systemctl daemon-reload
 systemd-analyze verify swarm-agent-worker.service || true

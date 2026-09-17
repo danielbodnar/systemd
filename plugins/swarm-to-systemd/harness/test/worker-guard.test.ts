@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { guardTools } from "../src/commands/worker.ts";
+import { guardTools } from "../src/tools/guard.ts";
 
 const denied = ["(^|/)secrets/values(/|$)", "^/etc/credstore"];
 const tools: { name: string; run: (input: any) => string }[] = [
