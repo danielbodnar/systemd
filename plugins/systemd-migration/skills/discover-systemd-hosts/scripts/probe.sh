@@ -115,7 +115,7 @@ probe_local() {
     done
 
     local tools=()
-    for t in systemd-nspawn systemd-vmspawn importctl machinectl portablectl systemd-repart systemd-creds systemd-sysext systemd-confext systemd-dissect systemd-mstack systemd-analyze systemd-tmpfiles systemd-sysusers resolvectl networkctl podman docker jq bun; do
+    for t in systemd-nspawn systemd-vmspawn importctl machinectl portablectl systemd-repart systemd-creds systemd-sysext systemd-confext systemd-dissect systemd-mstack systemd-analyze systemd-tmpfiles systemd-sysusers resolvectl networkctl podman docker haproxy jq bun; do
         if has_bin "$t"; then tools+=("\"$t\": true"); else tools+=("\"$t\": false"); fi
     done
 
