@@ -21,7 +21,7 @@ Within a stack, start data volumes and networks, then stateful services, then st
 1. Freeze changes to the stack on Swarm (`docker service update --replicas` is not run; nobody deploys).
 2. Stop the Swarm services in the stack, or scale to zero, and take the final volume sync.
 3. On each target host: `bash hosts/<host>/secrets/import-secrets.sh` then `bash hosts/<host>/install.sh --start`.
-4. `systemctl status <stack>.target` and `systemctl list-units '<stack>*'` on each host.
+4. `systemctl status <stack>.target` and `systemctl list-units '<stack>*'` on each host, then `/usr/local/lib/systemd-migration/stackctl status <stack>`, which reports each instance's state, its image version, and its last health result from the rollout specification `install.sh` put in place.
 
 **Verification.**
 - `verify.sh --expected rendered/expected.json --live` on each host: units active, containers healthy, ports listening.
@@ -31,9 +31,54 @@ Within a stack, start data volumes and networks, then stateful services, then st
 **Rollback trigger.** State the condition (health check failing after N minutes, error rate above a threshold, a data integrity check failing) that ends the attempt.
 
 **Rollback.**
-1. `systemctl stop <stack>.target` on the new hosts.
+1. `stackctl drain <host>` on each new host, which stops the stack's sockets before its instances in rollout order, or `systemctl stop <stack>.target` when the stack is not yet under the controller.
 2. Restore the Swarm services (`docker service scale`, or `docker stack deploy` from the archived compose file).
 3. If data changed on the new side after cutover, decide whether to copy it back; state the decision in the plan before the cutover so it is not made under pressure.
+
+## After the cutover: the rollout controller
+
+Once a stack is installed, everything that used to be `docker service update`,
+`docker service rollback`, `docker service scale`, and
+`docker node update --availability` is a verb of the rollout controller the
+systemd-rollout skill renders, `/usr/local/lib/systemd-migration/stackctl`. It
+reads `/etc/systemd-migration/rollout/<stack>.conf`, which carries each
+service's parallelism, delay, order, failure action and monitor window from the
+source's own `update_config`, so a deploy on systemd restarts instances in the
+batches the estate already used.
+
+| Intent | Command on the host |
+|---|---|
+| deploy a new image | `stackctl deploy <stack> --image <local-name>=<ref>` |
+| roll a service back | `stackctl rollback <stack> [<service>]` |
+| take the host out of service | `stackctl drain <host>` |
+| put it back | `stackctl activate <host>` |
+| change the instance count within the plan | `stackctl scale <service> <n>` |
+| replace a secret or a config | `stackctl rotate credential <name>`, `stackctl rotate config <name>` |
+| see where a stack stands | `stackctl status <stack>` |
+
+Every verb takes `--dry-run`, which prints the exact sequence of commands the
+real run prints and changes nothing; run it that way first and put its output
+in the change record. The exit code is the verdict: 0 done, 1 a batch did not
+come back and the failure action was applied, 2 usage or something this host
+does not run, 3 a malformed specification, 4 a missing tool or script.
+
+Two things the controller deliberately will not do, because they change the
+shape of the estate rather than its state: run more instances of a service on a
+host than the plan rendered there, and run a service on a host the plan does not
+place it on. Both are decisions in `plan.yaml` (`placement.hosts.<service>`,
+`placement.scale_out.estate`) followed by a re-render and `install.sh`. Write
+that into the stack's runbook so the person on call does not reach for a hand
+edit under pressure.
+
+Nothing reschedules a drained host's work. Before a drain, name the services
+whose only instance on the estate is on that host, and say which host takes
+them over first; `stackctl drain` stops them and the capacity is gone until
+another host is activated or scaled. The socket units go down before the
+instances, so a socket-activated or proxied backend stops accepting connections
+before the process behind it stops.
+
+The systemd-rollout skill's `references/runbook.md` maps each Swarm command
+onto its verb in full, with the arguments.
 
 ## Dual-run pattern
 

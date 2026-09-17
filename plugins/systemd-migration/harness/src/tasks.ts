@@ -68,6 +68,23 @@ export const TASKS: Record<string, Task> = {
     message:
       "Run the verifier for this host against ./rendered/expected.json. Use dry-run unless the operator's message says live. Report failures first with reproduction commands and a verdict.",
   },
+  rollout: {
+    name: "rollout",
+    agent: "./agents/rollout-operator.md",
+    title: "Roll a stack over on this host",
+    message:
+      "Read /etc/systemd-migration/rollout/ on this host (or rendered/hosts/$(hostname)/etc/systemd-migration/rollout/ when the stack is not installed yet) and report what the specification says per service. Then dry-run the verb I name with stackctl, show me the command sequence, and run it for real only after I agree. Verify the host live afterwards.",
+    rubric: `# Rollout rubric (starter)
+- The rollout specification for the stack was read and summarized per service: units, parallelism, delay, order, failure action, monitor window, and image path
+- Every verb was run with --dry-run first and the printed command sequence was shown before anything ran for real
+- What the failure action would do to an unhealthy batch was stated before the deploy started
+- The controller's exit code is reported and interpreted (0 done, 1 a batch did not come back, 2 usage, 3 bad specification, 4 a missing tool)
+- No unit was restarted, stopped, or edited outside stackctl, and no file under /etc was written by the session
+- A request the controller refuses (more instances than the plan rendered, a service this host does not run, a different order or monitor) is answered with the decision id in plan.yaml to change, not with a workaround
+- A drain names the services that lose their only instance on this host before anything stops
+- The final report lists the units that restarted, the image version now selected, and the health results`,
+    max_iterations: 4,
+  },
   migrate: {
     name: "migrate",
     agent: "./agents/migration-lead.md",

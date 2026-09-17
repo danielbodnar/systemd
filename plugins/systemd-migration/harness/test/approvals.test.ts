@@ -88,6 +88,43 @@ describe("write and edit gating", () => {
   });
 });
 
+describe("the rollout controller", () => {
+  const stackctl = "/usr/local/lib/systemd-migration/stackctl";
+  test("status and dry runs are allowed", () => {
+    expect(evaluate(policy, "bash", { command: `${stackctl} status web` }).decision).toBe("allow");
+    expect(evaluate(policy, "bash", { command: "stackctl status web" }).decision).toBe("allow");
+    expect(evaluate(policy, "bash", { command: "sh rendered/hosts/swarm-wrk-1/usr/local/lib/systemd-migration/stackctl status web" }).decision).toBe("allow");
+    expect(evaluate(policy, "bash", { command: `${stackctl} deploy web --dry-run` }).decision).toBe("allow");
+    expect(evaluate(policy, "bash", { command: `${stackctl} deploy web --image acme-app_2026.09=registry.example.com/acme/app:2026.10 --dry-run` }).decision).toBe("allow");
+    expect(evaluate(policy, "bash", { command: `${stackctl} drain swarm-wrk-1 --dry-run` }).decision).toBe("allow");
+    expect(evaluate(policy, "bash", { command: `${stackctl} rotate credential web_app_signing_key --dry-run` }).decision).toBe("allow");
+  });
+  test("every other verb asks, with the reason the operator reads", () => {
+    for (const command of [
+      `${stackctl} deploy web`,
+      `${stackctl} rollback web web_app`,
+      `${stackctl} drain swarm-wrk-1`,
+      `${stackctl} activate swarm-wrk-1`,
+      `${stackctl} scale web_app 1`,
+      `${stackctl} rotate config web_app_nginx`,
+    ]) {
+      const v = evaluate(policy, "bash", { command });
+      expect(v.decision, command).toBe("ask");
+      expect(v.reason).toContain("dry-run it first");
+    }
+  });
+  test("a denied command in the chain still denies, and substitution never rides the allow", () => {
+    expect(evaluate(policy, "bash", { command: `${stackctl} status web; systemctl restart web_app.service` }).decision).toBe("deny");
+    expect(evaluate(policy, "bash", { command: `${stackctl} deploy web --dry-run && bash hosts/a/install.sh` }).decision).toBe("deny");
+    expect(evaluate(policy, "bash", { command: "stackctl deploy web --dry-run $(cat /etc/shadow)" }).decision).toBe("ask");
+    expect(evaluate(policy, "bash", { command: `${stackctl} status web > /etc/cron.d/x` }).decision).toBe("ask");
+  });
+  test("the status rule does not stretch over another argument", () => {
+    expect(evaluate(policy, "bash", { command: `${stackctl} status web data` }).decision).toBe("ask");
+    expect(evaluate(policy, "bash", { command: "echo stackctl status web" }).decision).toBe("ask");
+  });
+});
+
 describe("plugin script rule is anchored", () => {
   const cases: Array<[string, "allow" | "deny" | "ask"]> = [
     ["bash -c 'render.ts; rm -rf /'", "deny"],
