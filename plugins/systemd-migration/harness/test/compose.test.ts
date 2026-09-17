@@ -215,6 +215,31 @@ describe("rendering from a plan", () => {
     expect(pgHealth).not.toContain("/bin/sh");
   });
 
+  test("health units run with the service's identity and no capabilities", () => {
+    const r = render(inv);
+    const health = r.files["hosts/swarm-wrk-1/etc/systemd/system/web_app-health.service"] as string;
+    const app = r.files["hosts/swarm-wrk-1/etc/systemd/system/web_app.service"] as string;
+    for (const line of ["NoNewPrivileges=yes", "CapabilityBoundingSet=", "RestrictSUIDSGID=yes", "LockPersonality=yes", "PrivateUsers=self"]) expect(health).toContain(line);
+    const identity = /^(DynamicUser=yes|User=.*)$/m;
+    expect(health.match(identity)?.[0]).toBe(app.match(identity)?.[0]);
+    expect(checkUnitText(health, "service").unknown).toEqual([]);
+  });
+
+  test("a config owner that is not a numeric id never reaches the install manifest", () => {
+    for (const [field, value] of [["uid", "0; rm -rf /"], ["gid", "$(id -u)"], ["uid", "root"]] as const) {
+      const hostile = JSON.parse(JSON.stringify(inv)) as Inventory;
+      const proxy = hostile.services.find((s) => s.name === "web_proxy")!;
+      (proxy.configs[0] as unknown as Record<string, unknown>)[field] = value;
+      expect(() => render(hostile)).toThrow(/not a numeric id/);
+      const plan = planFor(hostile);
+      resolveDecision(plan, configsId("web"), "confext");
+      expect(() => composeRender(hostile, plan, COMPONENTS, { acceptDefaults: true })).toThrow(/not a numeric id/);
+    }
+    const badMode = JSON.parse(JSON.stringify(inv)) as Inventory;
+    badMode.services.find((s) => s.name === "web_proxy")!.configs[0]!.mode = 0o10000;
+    expect(() => render(badMode)).toThrow(/not a file mode/);
+  });
+
   test("the scale-out and host-map options of the one-call renderer become placement decisions", () => {
     const plan = planFor(inv, { scaleOut: true, hostMap: { data_postgres: ["swarm-mgr-1"] } });
     expect(plan.decisions.find((d) => d.id === PLACEMENT_SCALE_OUT)!.chosen).toBe("yes");

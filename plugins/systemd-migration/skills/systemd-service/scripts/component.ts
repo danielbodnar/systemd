@@ -12,7 +12,7 @@
 import type { Component, DecisionSpec, PlanContext, RenderContext, ServiceShape } from "../../../contract/component.ts";
 import { instanceKey } from "../../../contract/component.ts";
 import { durationToSeconds, type ImageConfig, type Service } from "../../../contract/types.ts";
-import { healthCommand, octal, quote } from "../../../contract/unit.ts";
+import { fileOwnership, healthCommand, quote } from "../../../contract/unit.ts";
 
 /** Docker's default capability set, for services that neither add nor drop anything. */
 export const DOCKER_DEFAULT_CAPS = [
@@ -281,7 +281,8 @@ export const serviceComponent: Component = {
     const manifest: string[] = [];
     for (const [name, c] of [...configFiles].sort()) {
       if (c.data !== null) ctx.file(`etc/${c.stack}/configs/${name}`, Buffer.from(c.data, "base64").toString("utf8"));
-      manifest.push(`${c.stack}/configs/${name} ${c.uid} ${c.gid} ${octal(c.mode)}`);
+      const own = fileOwnership(c, `config ${name}`);
+      manifest.push(`${c.stack}/configs/${name} ${own.uid} ${own.gid} ${own.mode}`);
     }
     if (manifest.length) {
       ctx.install("pre", ["while read -r path uid gid mode; do", '    chown "$uid:$gid" "/etc/$path"', '    chmod "$mode" "/etc/$path"', "done <<'MANIFEST'", ...manifest, "MANIFEST"].join("\n"));
@@ -335,6 +336,18 @@ function renderHealthcheck(ctx: RenderContext, inst: { base: string; unit: strin
   hs.add("Service", shape.rootKind, shape.root);
   hs.add("Service", "MountAPIVFS", "yes");
   hs.add("Service", "PrivateUsers", "self");
+  // The check runs with the service's identity and none of its capabilities:
+  // a probe of a port or a file needs neither root nor the bounding set.
+  if (shape.dynamic) hs.add("Service", "DynamicUser", "yes");
+  else {
+    hs.add("Service", "User", shape.user);
+    hs.add("Service", "Group", shape.group);
+  }
+  hs.addEmpty("Service", "CapabilityBoundingSet");
+  hs.add("Service", "NoNewPrivileges", "yes");
+  hs.add("Service", "RestrictSUIDSGID", "yes");
+  hs.add("Service", "LockPersonality", "yes");
+  hs.add("Service", "ProtectProc", "invisible");
   hs.add("Service", "ExecSearchPath", shape.searchPath);
   hs.add("Service", "ExecStart", exec);
   hs.add("Service", "TimeoutStartSec", (timeout + 1) * retries);

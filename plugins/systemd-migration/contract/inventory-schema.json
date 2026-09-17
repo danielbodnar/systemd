@@ -103,9 +103,9 @@
         "name": { "type": "string" },
         "id": { "type": "string" },
         "target": { "type": "string", "description": "Path inside the container; Swarm mounts secrets under /run/secrets/ and configs where the spec says" },
-        "uid": { "type": "string" },
-        "gid": { "type": "string" },
-        "mode": { "type": "integer" }
+        "uid": { "type": "string", "pattern": "^[0-9]{1,10}$" },
+        "gid": { "type": "string", "pattern": "^[0-9]{1,10}$" },
+        "mode": { "type": "integer", "minimum": 0, "maximum": 4095 }
       }
     },
     "healthcheck": {

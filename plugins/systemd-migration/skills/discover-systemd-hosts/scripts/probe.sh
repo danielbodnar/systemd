@@ -151,9 +151,12 @@ fi
 status=0
 for host in "${remotes[@]}"; do
     # The script itself is the payload; the remote side needs nothing installed.
+    # The file is named after the host as the operator gave it, never after
+    # anything the remote side printed: the JSON is data from another machine.
+    name="${host##*@}"
+    name="${name//[^A-Za-z0-9._-]/_}"
+    [ -n "$name" ] && [ "$name" != "." ] && [ "$name" != ".." ] || name="remote"
     if out="$(ssh -o BatchMode=yes "$host" bash -s -- --local < "$0" 2>/dev/null)" && [ -n "$out" ]; then
-        name="$(printf '%s' "$out" | sed -n 's/^  "hostname": "\(.*\)",$/\1/p')"
-        [ -n "$name" ] || name="${host##*@}"
         printf '%s\n' "$out" > "$outdir/$name.json"
         echo "wrote $outdir/$name.json (from $host)"
     else

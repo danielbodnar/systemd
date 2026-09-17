@@ -6,7 +6,7 @@
 // atomically. A pure-/usr image can ship as a system extension.
 
 import type { Component, DecisionSpec, PlanContext, RenderContext } from "../../../contract/component.ts";
-import { octal } from "../../../contract/unit.ts";
+import { fileOwnership } from "../../../contract/unit.ts";
 
 export function configsId(stack: string): string {
   return `sysext.configs.${stack}`;
@@ -52,7 +52,8 @@ export const sysextComponent: Component = {
           const rel = `${dir}/etc/${stack}/configs/${c.name}`;
           if (def?.data_base64) ctx.file(rel, Buffer.from(def.data_base64, "base64").toString("utf8"));
           else ctx.note(`${inst.service.name}: config ${c.name} has no payload in the inventory; place it at /${rel} by hand`, "decision");
-          manifest.push(`${rel} ${c.uid} ${c.gid} ${octal(c.mode)}`);
+          const own = fileOwnership(c, `${inst.service.name}: config ${c.name}`);
+          manifest.push(`${rel} ${own.uid} ${own.gid} ${own.mode}`);
           u.add("Service", "BindReadOnlyPaths", `/etc/${stack}/configs/${c.name}:${target}`);
         }
       }

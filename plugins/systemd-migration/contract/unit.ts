@@ -142,6 +142,20 @@ export function octal(mode: number): string {
   return "0" + mode.toString(8).padStart(3, "0");
 }
 
+/**
+ * The owner and mode of a file the inventory describes, checked before they
+ * reach a shell manifest: uid and gid must be plain decimal, the mode must fit
+ * in the twelve permission bits. Anything else is a malformed capture, and the
+ * renderer refuses it rather than interpolating it into install.sh.
+ */
+export function fileOwnership(ref: { uid: string; gid: string; mode: number }, what: string): { uid: string; gid: string; mode: string } {
+  const id = /^[0-9]{1,10}$/;
+  if (!id.test(ref.uid)) throw new Error(`${what}: uid ${JSON.stringify(ref.uid)} is not a numeric id`);
+  if (!id.test(ref.gid)) throw new Error(`${what}: gid ${JSON.stringify(ref.gid)} is not a numeric id`);
+  if (!Number.isInteger(ref.mode) || ref.mode < 0 || ref.mode > 0o7777) throw new Error(`${what}: mode ${JSON.stringify(ref.mode)} is not a file mode`);
+  return { uid: ref.uid, gid: ref.gid, mode: octal(ref.mode) };
+}
+
 /** The shell command a Docker healthcheck runs, or null for NONE. */
 export function healthCommand(test: string[]): string | null {
   if (test.length === 0) return null;

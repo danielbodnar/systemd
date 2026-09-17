@@ -2,7 +2,7 @@
 //
 // A small JSON Schema validator covering the subset the inventory schema uses:
 // type, required, properties, additionalProperties, items, enum, const,
-// pattern, minimum, and local $ref into $defs. It exists so normalize.ts can
+// pattern, minimum, maximum, and local $ref into $defs. It exists so normalize.ts can
 // validate against the published contract without a dependency.
 
 export interface SchemaError {
@@ -53,6 +53,9 @@ export function validateSchema(value: unknown, schema: Schema, root: Schema = sc
   }
   if (typeof value === "number" && schema.minimum !== undefined && value < schema.minimum) {
     errors.push({ path, message: `below minimum ${schema.minimum}` });
+  }
+  if (typeof value === "number" && schema.maximum !== undefined && value > schema.maximum) {
+    errors.push({ path, message: `above maximum ${schema.maximum}` });
   }
   if (Array.isArray(value) && schema.items) {
     value.forEach((item, i) => validateSchema(item, schema.items, root, `${path}[${i}]`, errors));
