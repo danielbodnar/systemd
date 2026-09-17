@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.126.0",
+    "fast-sha256": "file:./vendor/fast-sha256",
     "yaml": "^2.9.1",
     "zod": "^4.6.5"
   },
