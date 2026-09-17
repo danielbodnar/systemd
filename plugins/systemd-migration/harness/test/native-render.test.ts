@@ -15,7 +15,7 @@ import { capabilitySet, commandLine, render } from "../../skills/systemd-service
 const capture = resolve(import.meta.dir, "../../../../test/test-container-migration/capture");
 const inv: Inventory = normalize(capture);
 const result = render(inv);
-const file = (host: string, rel: string) => result.files[`hosts/${host}/${rel}`];
+const file = (host: string, rel: string) => result.files[`hosts/${host}/${rel}`] as string | undefined;
 const unit = (host: string, name: string) => file(host, `etc/systemd/system/${name}`)!;
 
 describe("contract helpers", () => {
@@ -48,7 +48,7 @@ describe("native service renderer on the fixture estate", () => {
       const type = fileTypeOf(path);
       if (!type) continue;
       checked++;
-      const r = checkUnitText(content, type);
+      const r = checkUnitText(content as string, type);
       for (const u of r.unknown) unknown.push(`${path}:${u.line} [${u.section}] ${u.name}`);
       expect(r.skipped_sections.filter((s) => !s.startsWith("X-"))).toEqual([]);
     }
@@ -158,19 +158,19 @@ describe("native service renderer on the fixture estate", () => {
     expect(Object.keys(result.images).sort()).toEqual(["acme-app_2026.09", "library-caddy_2", "library-postgres_16.4", "prometheuscommunity-postgres-exporter_v0.15.0"]);
     expect(result.images["acme-app_2026.09"]!.hosts).toEqual(["swarm-wrk-1"]);
     expect(result.images["library-caddy_2"]!.hosts.sort()).toEqual(["swarm-mgr-1"]);
-    expect(JSON.parse(result.files["images.json"]!)["acme-app_2026.09"].digest).toMatch(/^sha256:/);
+    expect(JSON.parse(result.files["images.json"] as string)["acme-app_2026.09"].digest).toMatch(/^sha256:/);
   });
 
   test("decisions land in the notes", () => {
-    const notes = result.files["MIGRATION-NOTES.md"]!;
+    const notes = result.files["MIGRATION-NOTES.md"] as string;
     expect(notes).toContain("## Needs a human decision");
-    expect(notes).toContain("web_app: ingress-mode ports");
+    expect(notes).toContain("networkd.publish.web_app.8080-tcp");
     expect(notes).toContain("data_postgres: neither the service nor the inventoried image says what to run");
   });
 
   test("root-image mode writes RootImage= and needs no mount stack", () => {
     const r = render(inv, { rootImage: true });
-    const app = r.files["hosts/swarm-wrk-1/etc/systemd/system/web_app.service"]!;
+    const app = r.files["hosts/swarm-wrk-1/etc/systemd/system/web_app.service"] as string;
     expect(app).toContain("RootImage=/var/lib/machines/acme-app_2026.09.raw");
     expect(app).not.toContain("RootMStack=");
     expect(checkUnitText(app, "service").minimum_version).toBeLessThan(260);

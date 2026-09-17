@@ -1,4 +1,4 @@
-# Rendered by systemd-service: restarts swarm service data_postgres after 5 failed healthchecks
+# Rendered by systemd-service: restarts service data_postgres after 5 failed healthchecks
 
 [Unit]
 Description=restart data_postgres after a failed healthcheck

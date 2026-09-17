@@ -9,6 +9,9 @@ A container is a process tree with a private root file system, a few namespaces,
 
 ## Workflow
 
+The reviewed path is the plugin's drivers: `scripts/plan.ts` drafts `plan.yaml` from the inventory (and the host probes), `scripts/review.ts` walks its decisions with the user, and `scripts/render.ts` composes every registered component (this one, `systemd-machined`, `systemd-creds`, `systemd-resource-control`, `systemd-storage`, `systemd-networkd`, `systemd-resolved`, `systemd-journald`, `systemd-sysext`, `systemd-portable`) into the per-host tree. The `render.ts` in this skill is the one-call shortcut: it drafts a plan, applies its flags as chosen values, takes the first option of anything the planner refused to default, and lists every such choice under "needs a human decision". Use it for a first look; use the drivers for a migration.
+
+
 1. Confirm `inventory.json` exists and read its `warnings[]`. Images the capture could not inspect leave the entrypoint unknown; the renderer says so per service.
 2. Build the translation map (`migration-planner`) if it does not exist yet, and read its "needs a human decision" section: ingress ports, cross-host overlays, and privileged services need answers before the units are right.
 3. Render:

@@ -63,7 +63,7 @@ rules:
   # substitutions, a script name inside another command's arguments) does not
   # match and falls through to the operator.
   - tool: bash
-    match: '^\s*(bash|bun)\s+(\.?\.?/[A-Za-z0-9._/-]+/|[A-Za-z0-9._-]+/)*(capture\.sh|normalize\.ts|render\.ts|verify\.sh|plan-map\.ts|build-catalog\.ts|pull-images\.sh)(\s+[A-Za-z0-9._/=:,@%+-]+)*\s*$'
+    match: '^\s*(bash|bun)\s+(\.?\.?/[A-Za-z0-9._/-]+/|[A-Za-z0-9._-]+/)*(capture\.sh|normalize\.ts|render\.ts|verify\.sh|plan\.ts|review\.ts|plan-map\.ts|build-catalog\.ts|pull-images\.sh|probe\.sh|make-ddi\.sh)(\s+[A-Za-z0-9._/=:,@%+-]+)*\s*$'
     decision: allow
     reason: plugin script
   # Common read-only shell tools.

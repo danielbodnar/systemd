@@ -1,0 +1,5 @@
+# Rendered by systemd-service: service names for the migrated estate; one line per name, pointing at the host that runs it
+10.0.0.12 data_exporter exporter
+10.0.0.12 data_postgres postgres db
+10.0.0.12 web_app app
+10.0.0.11 web_proxy proxy

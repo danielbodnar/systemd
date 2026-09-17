@@ -11,6 +11,11 @@
   ],
   "timers": [],
   "mounts": [],
+  "sockets": [],
+  "machines": [],
+  "networks": [
+    "web_frontend"
+  ],
   "ports": [
     {
       "port": 80,

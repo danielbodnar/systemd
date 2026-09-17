@@ -7,12 +7,11 @@ PartOf=data.target
 After=network-online.target
 Wants=network-online.target
 ConditionHost=swarm-wrk-1
-RequiresMountsFor=/var/lib/data/data_backups
 Wants=data_postgres-health.timer
+RequiresMountsFor=/var/lib/data/data_backups
 
 [Service]
 Type=exec
-Slice=stack-data.slice
 RootMStack=/var/lib/machines/library-postgres_16.4.mstack
 MountAPIVFS=yes
 PrivateTmp=yes
@@ -25,14 +24,6 @@ Environment=PGDATA=/var/lib/postgresql/data/pgdata
 Environment=POSTGRES_DB=app
 Environment=POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
 Environment=POSTGRES_USER=app
-LoadCredentialEncrypted=data_postgres_password:/etc/credstore.encrypted/data_postgres_password
-BindReadOnlyPaths=%d/data_postgres_password:/run/secrets/postgres_password
-BindPaths=/var/lib/data/data_pgdata:/var/lib/postgresql/data
-BindPaths=/var/lib/data/data_backups:/backups
-BindReadOnlyPaths=/etc/localtime:/etc/localtime
-CPUQuota=200%
-MemoryMax=2G
-MemoryLow=1G
 CapabilityBoundingSet=CAP_AUDIT_WRITE CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER CAP_FSETID CAP_KILL CAP_MKNOD CAP_NET_BIND_SERVICE CAP_NET_RAW CAP_SETFCAP CAP_SETGID CAP_SETPCAP CAP_SETUID CAP_SYS_CHROOT
 NoNewPrivileges=yes
 RestrictSUIDSGID=yes
@@ -43,6 +34,15 @@ RestartSec=5
 TimeoutStopSec=60
 KillSignal=SIGINT
 KillMode=mixed
+LoadCredentialEncrypted=data_postgres_password:/etc/credstore.encrypted/data_postgres_password
+BindReadOnlyPaths=%d/data_postgres_password:/run/secrets/postgres_password
+Slice=stack-data.slice
+CPUQuota=200%
+MemoryMax=2G
+MemoryLow=1G
+BindPaths=/var/lib/data/data_pgdata:/var/lib/postgresql/data
+BindPaths=/var/lib/data/data_backups:/backups
+BindReadOnlyPaths=/etc/localtime:/etc/localtime
 SyslogIdentifier=data_postgres
 LogExtraFields=SWARM_STACK=data SWARM_SERVICE=data_postgres
 
@@ -54,3 +54,4 @@ Image=docker.io/library/postgres:16.4
 ImageDigest=sha256:0000000000000000000000000000000000000000000000000000000000000003
 ImageName=library-postgres_16.4
 Renderer=systemd-service
+Form=service

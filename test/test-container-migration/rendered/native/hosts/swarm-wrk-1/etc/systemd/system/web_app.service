@@ -13,7 +13,6 @@ Wants=web_app-health.timer
 
 [Service]
 Type=exec
-Slice=stack-web.slice
 RootMStack=/var/lib/machines/acme-app_2026.09.mstack
 MountAPIVFS=yes
 PrivateDevices=yes
@@ -24,21 +23,9 @@ ExecStart=/usr/bin/app serve --port 8080
 WorkingDirectory=/srv/app
 User=1000
 Group=1000
-LoadCredentialEncrypted=web_app-app-secret-key:/etc/credstore.encrypted/web_app-app-secret-key
 Environment=APP_HOME=/srv/app
-Environment=APP_SECRET_KEY_FILE=%d/web_app-app-secret-key
 Environment=DATABASE_URL=postgres://app@data_postgres:5432/app
 Environment=LOG_LEVEL=info
-LoadCredentialEncrypted=web_app_signing_key:/etc/credstore.encrypted/web_app_signing_key
-BindReadOnlyPaths=%d/web_app_signing_key:/run/secrets/signing_key
-TemporaryFileSystem=/tmp:size=67108864
-BindPaths=/var/lib/web/web_cache:/cache
-SocketBindAllow=tcp:8080
-SocketBindDeny=any
-CPUQuota=150%
-MemoryMax=512M
-MemoryLow=128M
-TasksMax=512
 CapabilityBoundingSet=
 NoNewPrivileges=yes
 RestrictSUIDSGID=yes
@@ -48,6 +35,19 @@ Restart=on-failure
 RestartSec=3
 TimeoutStopSec=30
 KillMode=mixed
+LoadCredentialEncrypted=web_app-app-secret-key:/etc/credstore.encrypted/web_app-app-secret-key
+Environment=APP_SECRET_KEY_FILE=%d/web_app-app-secret-key
+LoadCredentialEncrypted=web_app_signing_key:/etc/credstore.encrypted/web_app_signing_key
+BindReadOnlyPaths=%d/web_app_signing_key:/run/secrets/signing_key
+Slice=stack-web.slice
+CPUQuota=150%
+MemoryMax=512M
+MemoryLow=128M
+TasksMax=512
+TemporaryFileSystem=/tmp:size=67108864
+BindPaths=/var/lib/web/web_cache:/cache
+SocketBindAllow=tcp:8080
+SocketBindDeny=any
 SyslogIdentifier=web_app
 LogExtraFields=SWARM_STACK=web SWARM_SERVICE=web_app
 
@@ -59,3 +59,4 @@ Image=registry.example.com/acme/app:2026.09
 ImageDigest=sha256:0000000000000000000000000000000000000000000000000000000000000002
 ImageName=acme-app_2026.09
 Renderer=systemd-service
+Form=service

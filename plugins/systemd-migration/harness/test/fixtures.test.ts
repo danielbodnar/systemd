@@ -43,7 +43,7 @@ describe("committed fixtures", () => {
     expect(existsSync(dir)).toBe(true);
     expect(walk(dir)).toEqual(Object.keys(fresh.files).sort());
     for (const [rel, content] of Object.entries(fresh.files)) {
-      expect(readFileSync(join(dir, rel), "utf8"), rel).toBe(content);
+      expect(readFileSync(join(dir, rel), "utf8"), rel).toBe(content as string);
     }
   });
 });

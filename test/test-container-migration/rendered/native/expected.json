@@ -1,4 +1,35 @@
 {
+  "swarm-mgr-1": {
+    "hostname": "swarm-mgr-1",
+    "units": [
+      "web_proxy.service"
+    ],
+    "targets": [
+      "web.target"
+    ],
+    "slices": [
+      "stack-web.slice"
+    ],
+    "timers": [],
+    "mounts": [],
+    "sockets": [],
+    "machines": [],
+    "networks": [
+      "web_frontend"
+    ],
+    "ports": [
+      {
+        "port": 80,
+        "protocol": "tcp"
+      }
+    ],
+    "credentials": [],
+    "images": [
+      "/var/lib/machines/library-caddy_2.mstack"
+    ],
+    "volumes": [],
+    "root_kind": "RootMStack"
+  },
   "swarm-wrk-1": {
     "hostname": "swarm-wrk-1",
     "units": [
@@ -25,6 +56,13 @@
     "mounts": [
       "var-lib-data-data_backups.mount"
     ],
+    "sockets": [],
+    "machines": [],
+    "networks": [
+      "data_backend",
+      "data_monitoring",
+      "web_frontend"
+    ],
     "ports": [
       {
         "port": 9187,
@@ -49,31 +87,7 @@
       "/var/lib/data/data_pgdata",
       "/var/lib/data/data_backups",
       "/var/lib/web/web_cache"
-    ]
-  },
-  "swarm-mgr-1": {
-    "hostname": "swarm-mgr-1",
-    "units": [
-      "web_proxy.service"
     ],
-    "targets": [
-      "web.target"
-    ],
-    "slices": [
-      "stack-web.slice"
-    ],
-    "timers": [],
-    "mounts": [],
-    "ports": [
-      {
-        "port": 80,
-        "protocol": "tcp"
-      }
-    ],
-    "credentials": [],
-    "images": [
-      "/var/lib/machines/library-caddy_2.mstack"
-    ],
-    "volumes": []
+    "root_kind": "RootMStack"
   }
 }

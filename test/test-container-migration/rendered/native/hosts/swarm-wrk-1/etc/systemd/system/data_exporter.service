@@ -10,7 +10,6 @@ ConditionHost=swarm-wrk-1
 
 [Service]
 Type=exec
-Slice=stack-data.slice
 RootMStack=/var/lib/machines/prometheuscommunity-postgres-exporter_v0.15.0.mstack
 MountAPIVFS=yes
 PrivateTmp=yes
@@ -24,11 +23,6 @@ DynamicUser=yes
 Environment=DATA_SOURCE_PASS_FILE=/run/secrets/postgres_password
 Environment=DATA_SOURCE_URI=postgres:5432/app?sslmode=disable
 Environment=DATA_SOURCE_USER=app
-LoadCredentialEncrypted=data_postgres_password:/etc/credstore.encrypted/data_postgres_password
-BindReadOnlyPaths=%d/data_postgres_password:/run/secrets/postgres_password
-SocketBindAllow=tcp:9187
-SocketBindDeny=any
-MemoryMax=128M
 CapabilityBoundingSet=
 NoNewPrivileges=yes
 RestrictSUIDSGID=yes
@@ -36,6 +30,12 @@ LockPersonality=yes
 Restart=always
 RestartSec=5
 KillMode=mixed
+LoadCredentialEncrypted=data_postgres_password:/etc/credstore.encrypted/data_postgres_password
+BindReadOnlyPaths=%d/data_postgres_password:/run/secrets/postgres_password
+Slice=stack-data.slice
+MemoryMax=128M
+SocketBindAllow=tcp:9187
+SocketBindDeny=any
 SyslogIdentifier=data_exporter
 LogExtraFields=SWARM_STACK=data SWARM_SERVICE=data_exporter
 
@@ -46,3 +46,4 @@ Service=data_exporter
 Image=quay.io/prometheuscommunity/postgres-exporter:v0.15.0
 ImageName=prometheuscommunity-postgres-exporter_v0.15.0
 Renderer=systemd-service
+Form=service

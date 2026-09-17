@@ -24,6 +24,13 @@
   "mounts": [
     "var-lib-data-data_backups.mount"
   ],
+  "sockets": [],
+  "machines": [],
+  "networks": [
+    "data_backend",
+    "data_monitoring",
+    "web_frontend"
+  ],
   "ports": [
     {
       "port": 9187,

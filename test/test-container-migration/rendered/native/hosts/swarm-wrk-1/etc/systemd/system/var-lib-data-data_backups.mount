@@ -1,7 +1,7 @@
-# Rendered by systemd-service from swarm volume data_backups (driver local, type nfs)
+# Rendered by systemd-service from volume data_backups (driver local, type nfs)
 
 [Unit]
-Description=data_backups (swarm volume, nfs)
+Description=data_backups (volume, nfs)
 After=network-online.target
 Wants=network-online.target
 
