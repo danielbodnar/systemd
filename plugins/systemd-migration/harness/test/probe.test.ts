@@ -67,11 +67,27 @@ describe("discover-systemd-hosts probe", () => {
     ].join("\n"));
     chmodSync(join(fake, "ssh"), 0o755);
     const out = mkdtempSync(resolve(import.meta.dir, "../.tmp/probe-remote-"));
-    const remote = Bun.spawnSync(["bash", script, "-o", out, "--ssh", "operator@node-a.example", "--ssh", "bad/../name"], { env: { ...process.env, PATH: `${fake}:${process.env.PATH}` } });
+    const remote = Bun.spawnSync(["bash", script, "-o", out, "--ssh", "operator@node-a.example"], { env: { ...process.env, PATH: `${fake}:${process.env.PATH}` } });
     expect(remote.exitCode, remote.stderr.toString()).toBe(0);
-    expect(readdirSync(out).sort()).toEqual(["bad_.._name.json", "node-a.example.json"]);
+    expect(readdirSync(out)).toEqual(["node-a.example.json"]);
     expect(existsSync(resolve(out, "../../escaped.json"))).toBe(false);
     expect(JSON.parse(readFileSync(join(out, "node-a.example.json"), "utf8")).hostname).toBe("../../escaped");
+    rmSync(fake, { recursive: true, force: true });
+    rmSync(out, { recursive: true, force: true });
+  });
+
+  test("an --ssh value that is not NAME or USER@NAME is refused before ssh runs", () => {
+    const fake = mkdtempSync(resolve(import.meta.dir, "../.tmp/fake-ssh-"));
+    writeFileSync(join(fake, "ssh"), "#!/bin/sh\ntouch \"$(dirname \"$0\")/ssh-ran\"\nexit 1\n");
+    chmodSync(join(fake, "ssh"), 0o755);
+    const out = mkdtempSync(resolve(import.meta.dir, "../.tmp/probe-bad-"));
+    for (const bad of ["-oProxyCommand=touch /tmp/x", "-v", "host name", "a@b@c", "", "user@-host", "host/../x"]) {
+      const r = Bun.spawnSync(["bash", script, "-o", out, "--ssh", bad], { env: { ...process.env, PATH: `${fake}:${process.env.PATH}` } });
+      expect(r.exitCode, bad).toBe(2);
+      expect(r.stderr.toString(), bad).toContain("not a host");
+    }
+    expect(existsSync(join(fake, "ssh-ran"))).toBe(false);
+    expect(readdirSync(out)).toEqual([]);
     rmSync(fake, { recursive: true, force: true });
     rmSync(out, { recursive: true, force: true });
   });

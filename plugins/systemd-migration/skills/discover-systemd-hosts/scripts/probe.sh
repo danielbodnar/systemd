@@ -25,7 +25,15 @@ remotes=()
 while [ $# -gt 0 ]; do
     case "$1" in
         -o) outdir="$2"; shift 2 ;;
-        --ssh) remotes+=("$2"); shift 2 ;;
+        --ssh)
+            # A host is a plain name or user@name; anything else (an option
+            # such as -oProxyCommand=..., a path, a space) is refused before
+            # it can reach ssh's argument parser.
+            if ! [[ "${2:-}" =~ ^([A-Za-z0-9._-]+@)?[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+                echo "not a host: '${2:-}' (expected NAME or USER@NAME)" >&2
+                exit 2
+            fi
+            remotes+=("$2"); shift 2 ;;
         -h|--help) sed -n '4,19p' "$0"; exit 0 ;;
         --local) shift ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
@@ -156,7 +164,7 @@ for host in "${remotes[@]}"; do
     name="${host##*@}"
     name="${name//[^A-Za-z0-9._-]/_}"
     [ -n "$name" ] && [ "$name" != "." ] && [ "$name" != ".." ] || name="remote"
-    if out="$(ssh -o BatchMode=yes "$host" bash -s -- --local < "$0" 2>/dev/null)" && [ -n "$out" ]; then
+    if out="$(ssh -o BatchMode=yes -- "$host" bash -s -- --local < "$0" 2>/dev/null)" && [ -n "$out" ]; then
         printf '%s\n' "$out" > "$outdir/$name.json"
         echo "wrote $outdir/$name.json (from $host)"
     else
