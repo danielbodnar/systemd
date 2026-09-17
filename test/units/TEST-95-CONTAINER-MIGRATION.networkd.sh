@@ -57,6 +57,8 @@ keys() {
 
 leases=0
 vxlans=0
+netdevs=0
+reuseports=0
 for host in "$RENDERED"/hosts/*/; do
     name="$(basename "$host")"
     netdir="$host/etc/systemd/network"
@@ -72,6 +74,12 @@ for host in "$RENDERED"/hosts/*/; do
         test -n "$decided_subnet"
         grep -E "^Name=vz-$net\$" "$file" >/dev/null
         grep -E "^DHCPServer=yes\$" "$file" >/dev/null
+        # systemd-nspawn refuses Zone= when vz- plus the zone name is longer
+        # than an interface name may be, so the rendered bridge never is.
+        if [[ "${#net}" -gt 12 ]]; then
+            echo "FAIL: $file matches vz-$net, which is longer than the kernel accepts" >&2
+            exit 1
+        fi
         # No address in the bridge file leaves the decided range: the gateway, the leases, all of them.
         for addr in $(keys "$file" Address); do
             in_cidr "$addr" "$decided_subnet"
@@ -103,6 +111,36 @@ for host in "$RENDERED"/hosts/*/; do
             exit 1
         fi
     done
+    # Every rendered netdev, whichever transport raised it, names a kind the
+    # catalogue knows and an interface name the kernel accepts (IFNAMSIZ - 1),
+    # and none of them carries key material as a value: MACsec reads its key
+    # through KeyFile= from the credential systemd-networkd.service loads.
+    for file in "$netdir"/25-migration-*.netdev; do
+        [[ -f "$file" ]] || continue
+        grep -E '^\[NetDev\]$' "$file" >/dev/null
+        kind="$(keys "$file" Kind)"
+        test -n "$kind"
+        ifname="$(keys "$file" Name)"
+        test -n "$ifname"
+        if [[ "${#ifname}" -gt 15 ]]; then
+            echo "FAIL: $file names the interface $ifname, which is longer than the kernel accepts" >&2
+            exit 1
+        fi
+        if grep -E '^(Key|PresharedKey)=' "$file" >/dev/null; then
+            echo "FAIL: $file carries key material as a value; keys belong in credentials" >&2
+            exit 1
+        fi
+        netdevs=$((netdevs + 1))
+    done
+    # A socket that shares a published port says so with ReusePort= and names
+    # the unit it hands the connection to.
+    for file in "$host"/etc/systemd/system/*.socket; do
+        [[ -f "$file" ]] || continue
+        grep -E '^ReusePort=yes$' "$file" >/dev/null || continue
+        test -n "$(keys "$file" Service)"
+        test -n "$(sed -n 's/^Listen[A-Za-z]*=//p' "$file")"
+        reuseports=$((reuseports + 1))
+    done
     echo "checked $name"
 done
 
@@ -110,6 +148,12 @@ done
 machine_count="$(grep -c '^ *chosen: machine$' "$PLAN")"
 test "$machine_count" -gt 0
 test "$leases" -gt 0
+if [[ "$netdevs" -eq 0 ]]; then
+    echo "no netdev in the committed trees (no transport was decided for them); the kind and interface name checks ran on nothing"
+fi
 if [[ "$vxlans" -eq 0 ]]; then
     echo "no VXLAN netdev in the committed machine tree (its machines share one host); the VNI check ran on nothing"
+fi
+if [[ "$reuseports" -eq 0 ]]; then
+    echo "no socket in the committed trees shares a published port; the ReusePort= check ran on nothing"
 fi

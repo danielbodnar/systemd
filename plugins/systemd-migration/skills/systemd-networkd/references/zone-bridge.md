@@ -53,7 +53,7 @@ A static lease matches the client's hardware address, and `systemd-nspawn` would
 
 ## The transports
 
-A network whose attached machines land on more than one host needs a transport, chosen in `networkd.transport.<network>`. The files below are rendered on every host of the network; the examples show host `swarm-wrk-1` (position 1) with peer `swarm-mgr-1` (position 0), a VNI of 3, a tunnel range of `100.64.3.0/24`, and a base port of 51820 for the third network sorted by name.
+A network whose attached machines land on more than one host needs a transport, chosen in `networkd.transport.<network>`. The decision offers every tunnel kind `systemd.netdev(5)` documents; `references/transports.md` is the table of all of them, and the four below are the ones this page follows in full. The files are rendered on every host of the network; the examples show host `swarm-wrk-1` (position 1) with peer `swarm-mgr-1` (position 0), a VNI of 3, a tunnel range of `100.64.3.0/24`, and a base port of 51820 for the third network sorted by name.
 
 ### vxlan-wireguard
 
@@ -156,6 +156,10 @@ Until the uplink is answered the routes are listed in the notes as a decision, n
 ### Forwarding
 
 The routed transports need the host to forward between the bridge and the tunnel or the uplink, so `/etc/sysctl.d/80-migration-forwarding.conf` sets `net.ipv4.ip_forward = 1` on those hosts only. An L2 transport needs no forwarding beyond the masquerading `systemd-networkd` configures per interface.
+
+## Virtual machines on the zone
+
+A service the plan runs as a virtual machine joins the same bridge through a tap. `systemd-vmspawn --network-tap` creates `vt-<machine>` and leaves the host side to a `.network` file, which by default is the shipped `80-vm-vt.network` and would give the machine a subnet of its own. `25-migration-vt-<machine>.network` sorts before it and enslaves the tap into `vz-<network>` instead, so the machine takes its address from the zone's DHCP server like the containers. The static lease matches because the `systemd-vmspawn@.service` drop-in carries `Environment=SYSTEMD_VMSPAWN_NETWORK_MAC=` with the MAC derived from the machine name (`docs/ENVIRONMENT.md`), the same derivation `systemd-nspawn` gets. `networkd.tap.<service>` decides whether `systemd-vmspawn` creates the tap or `systemd-networkd` pre-creates it with a `.netdev`; the two cannot both create it, which is what the decision is for.
 
 ## macvlan and ipvlan
 

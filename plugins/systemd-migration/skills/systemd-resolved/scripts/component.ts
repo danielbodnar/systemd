@@ -7,7 +7,7 @@
 import type { Component, DecisionSpec, PlanContext, RenderContext } from "../../../contract/component.ts";
 import { placementId } from "../../../contract/compose.ts";
 import { splitList } from "../../../contract/plan.ts";
-import { LEASES, type Lease, domainId } from "../../systemd-networkd/scripts/component.ts";
+import { LEASES, type Lease, domainId, vipId } from "../../systemd-networkd/scripts/component.ts";
 
 export const DISCOVERY = "resolved.discovery.estate";
 
@@ -39,8 +39,12 @@ export const resolvedComponent: Component = {
 
   render(ctx: RenderContext): void {
     const how = ctx.value(DISCOVERY);
+    /** The address a service answers on estate-wide, when a published port gave it one of its own. */
+    const vip = (service: string): string | null => (ctx.resolvable(vipId(service)) ? ctx.value(vipId(service)) : null);
     if (how === "dnssd") {
       for (const inst of ctx.instances) {
+        const address = vip(inst.service.name);
+        if (address) ctx.note(`${inst.service.name}: the DNS-SD records announce ${ctx.host}, not the virtual address ${address} the multipath publish decision gave the service; a client that resolves the service through DNS-SD reaches one host directly and bypasses the multipath route, so publish an A record for ${address} in the site's DNS when the virtual address is meant to be the entry point`, "decision");
         for (const p of inst.service.ports) {
           const published = p.published ?? p.target;
           const port = inst.count > 1 ? published + (inst.index - 1) : published;
@@ -63,6 +67,14 @@ export const resolvedComponent: Component = {
         const hosts = [...new Set(splitList(ctx.valueOr(placementId(svc.name), "")))].sort();
         const names = new Set<string>([svc.name, svc.short_name]);
         for (const n of svc.networks) for (const a of n.aliases) names.add(a);
+        // A service with an address of its own answers there wherever it runs, so the
+        // fragment names the virtual address once instead of every host that carries it.
+        const address = vip(svc.name);
+        if (address) {
+          lines.push(`${address} ${[...names].join(" ")}`);
+          ctx.note(`${svc.name}: resolved at its virtual address ${address} rather than at ${hosts.join(", ")}; the multipath routes the networkd component renders are what carry that address to the instances`);
+          continue;
+        }
         for (const h of hosts) {
           const machines = leases.filter((l) => l.service === svc.name && l.host === h).sort((a, b) => a.base.localeCompare(b.base));
           if (machines.length) {
@@ -83,7 +95,11 @@ export const resolvedComponent: Component = {
       for (const z of [...segments].sort()) ctx.note(`machines on the ${z} segment are listed at the address the guest must configure (see the networkd component's notes)`, "decision");
       for (const z of [...zones].sort()) ctx.note(`machines on zone vz-${z} are listed at their static lease address; on ${ctx.host} their DHCP lease names also resolve under ${ctx.valueOr(domainId(z), "the zone's local lease domain")} through the bridge's LocalLeaseDomain=`);
     } else {
-      ctx.note(`service names are published in the site's DNS by decision; the records to create are listed per service in the plan (${ctx.instances.map((i) => `${i.service.name} -> ${ctx.host}${i.service.ports.map((p) => `:${p.published ?? p.target}`).join("")}`).join("; ")})`, "decision");
+      ctx.note(`service names are published in the site's DNS by decision; the records to create are listed per service in the plan (${ctx.instances.map((i) => `${i.service.name} -> ${vip(i.service.name) ?? ctx.host}${i.service.ports.map((p) => `:${p.published ?? p.target}`).join("")}`).join("; ")})`, "decision");
+      for (const name of [...new Set(ctx.instances.map((i) => i.service.name))].sort()) {
+        const address = vip(name);
+        if (address) ctx.note(`${name}: publish one A record for ${address}, its virtual address, instead of one per host; the multipath routes carry it to whichever instance the flow hashes onto`, "decision");
+      }
     }
   },
 };
