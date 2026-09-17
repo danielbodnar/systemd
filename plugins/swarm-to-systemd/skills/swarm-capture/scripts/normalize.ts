@@ -16,9 +16,17 @@ import type {
   Secret, Service, Stack, Task, UpdateConfig, Volume,
 } from "./types.ts";
 import { nsToDuration } from "./types.ts";
+import { validateSchema } from "./schema.ts";
+import { dirname, resolve as resolvePath } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const SCHEMA_PATH = resolvePath(dirname(fileURLToPath(import.meta.url)), "..", "references", "inventory-schema.json");
 
 const STACK_LABEL = "com.docker.stack.namespace";
 const SECRET_ENV = /(pass(word)?|secret|token|api[_-]?key|private[_-]?key|credential|pwd|auth)/i;
+// Values that carry a credential regardless of the variable name: URI userinfo
+// with a password, and key=value credential forms inside the value.
+const SECRET_VALUE = /(:\/\/[^/@\s]+:[^/@\s]+@|(^|[;&?, ])(password|passwd|pwd|secret|token|api[_-]?key)=)/i;
 
 type Json = Record<string, any>;
 
@@ -50,7 +58,7 @@ function envToMap(list: string[] | undefined, keepValues: boolean): { env: Recor
     const idx = entry.indexOf("=");
     const key = idx === -1 ? entry : entry.slice(0, idx);
     const value = idx === -1 ? "" : entry.slice(idx + 1);
-    if (!keepValues && SECRET_ENV.test(key)) {
+    if (!keepValues && (SECRET_ENV.test(key) || SECRET_VALUE.test(value))) {
       env[key] = "<redacted>";
       redacted.push(key);
     } else {
@@ -362,6 +370,15 @@ export function normalize(dir: string, opts: { keepEnvValues?: boolean } = {}): 
       warnings.push(`service ${s.name}: publishes through the ingress routing mesh; systemd hosts publish per host`);
     }
   }
+  const volumeNames = new Set((readJson(dir, "volumes.json") as Json[]).map((v) => v.Name));
+  for (const s of svcs) {
+    for (const m of s.mounts) {
+      if (m.type === "volume" && m.source && !volumeNames.has(m.source)) {
+        const where = s.tasks.map((t) => t.node).filter(Boolean).join(", ") || "the nodes running it";
+        warnings.push(`service ${s.name}: volume ${m.source} is not present on the capturing node (volumes are node-local); capture or inspect it on ${where}`);
+      }
+    }
+  }
   const nets = networks(readJson(dir, "networks.json"), svcs);
   for (const n of nets) if (n.encrypted) warnings.push(`network ${n.name}: encrypted overlay; cross-host transport must be replaced (see systemd-migration-plan/references/networking.md)`);
   const inv: Inventory = {
@@ -373,7 +390,7 @@ export function normalize(dir: string, opts: { keepEnvValues?: boolean } = {}): 
       engine_version: info.ServerVersion ?? "",
       managers: info.Swarm?.Managers ?? nodeList.filter((n) => n.role === "manager").length,
       workers: info.Swarm?.Nodes !== undefined ? info.Swarm.Nodes - (info.Swarm.Managers ?? 0) : nodeList.filter((n) => n.role === "worker").length,
-      is_leader: nodeList.some((n) => n.leader && n.hostname === manifest.captured_on),
+      is_leader: nodeList.some((n) => n.leader && n.id === (manifest.captured_node_id ?? info.Swarm?.NodeID)),
     },
     nodes: nodeList,
     stacks: stacks(svcs),
@@ -388,11 +405,13 @@ export function normalize(dir: string, opts: { keepEnvValues?: boolean } = {}): 
   return inv;
 }
 
-/** Structural validation of the required top-level shape. Throws on failure. */
+/** Validate against the published JSON Schema plus cross-field checks. Throws on failure. */
 export function validate(inv: Inventory): void {
-  const required: (keyof Inventory)[] = ["version", "captured_at", "cluster", "nodes", "stacks", "services", "networks", "volumes", "secrets", "configs"];
-  for (const k of required) if (inv[k] === undefined) throw new Error(`inventory missing required field: ${k}`);
-  if (inv.version !== "1") throw new Error(`unsupported inventory version ${inv.version}`);
+  const schema = JSON.parse(readFileSync(SCHEMA_PATH, "utf8"));
+  const errors = validateSchema(inv, schema);
+  if (errors.length > 0) {
+    throw new Error(`inventory does not match ${SCHEMA_PATH}:\n${errors.slice(0, 20).map((e) => `  ${e.path}: ${e.message}`).join("\n")}${errors.length > 20 ? `\n  ... ${errors.length - 20} more` : ""}`);
+  }
   const names = new Set<string>();
   for (const s of inv.services) {
     if (!s.name || !s.image) throw new Error(`service ${s.id ?? "?"} lacks a name or image`);

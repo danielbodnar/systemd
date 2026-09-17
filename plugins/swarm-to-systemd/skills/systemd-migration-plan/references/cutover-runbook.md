@@ -11,7 +11,7 @@ Within a stack, start data volumes and networks, then stateful services, then st
 ## Per-stack runbook
 
 **Preflight.**
-- Target host has Podman, the rendered units copied (not yet installed), and the `secrets/values/` files present with mode 0600.
+- Target host has Podman, the rendered units copied (not yet installed), and `/etc/swarm-migration/secrets/` populated (root-only, one file per secret, mode 0600).
 - `bash "${CLAUDE_PLUGIN_ROOT}/skills/systemd-verify/scripts/verify.sh" --expected rendered/expected.json --dry-run` passes on the target host.
 - Volume copy completed (or first pass completed for the stop-copy pattern) and ownership restored.
 - Cross-host transport is up and tested with `ping` and a TCP probe from a container on the bridge.

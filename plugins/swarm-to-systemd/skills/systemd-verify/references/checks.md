@@ -6,7 +6,7 @@
 |---|---|---|
 | `unit-file` | file test for each `<unit>.container` in the units directory | The rendered tree for this host is incomplete or the wrong host's tree was copied. |
 | `quadlet-generator` | `QUADLET_UNIT_DIRS=<dir> podman-system-generator --dryrun` | A unit uses a key the installed Podman does not know, or has a syntax error; the generator names the file and key. |
-| `systemd-analyze` | `systemd-analyze verify <generated unit>` | Ordering or dependency problems in the generated service; reported as a warning because some findings (a target present on another host) are expected. |
+| `systemd-analyze` | `systemd-analyze verify <generated unit>` | The generated service fails verification: a bad directive, a missing dependency, or an ordering cycle. A target that lives on another host is not referenced from the unit itself, so this is a real problem to fix in the rendered tree. |
 | `podman` | `podman --version` | Podman is missing; nothing else can work. |
 | `secret` | `podman secret exists <name>` | Reported as a warning before install because secrets are imported in the cutover step. |
 

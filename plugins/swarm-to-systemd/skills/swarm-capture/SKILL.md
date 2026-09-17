@@ -10,7 +10,7 @@ A migration is only as trustworthy as the inventory it starts from, so this skil
 ## When to run what
 
 1. **On a manager node**, run `scripts/capture.sh`. It only needs the `docker` CLI and a manager socket; it never modifies the cluster. Copy the resulting directory off the host.
-2. **Anywhere with Bun installed**, run `scripts/normalize.ts` on that directory to produce `inventory.json`. The normalizer redacts environment values whose names look secret-bearing, converts Docker's nanosecond durations into systemd-style strings, and links volumes, secrets, and configs to the services that use them.
+2. **Anywhere with Bun installed**, run `scripts/normalize.ts` on that directory to produce `inventory.json`. The normalizer redacts environment values whose names or values look credential-bearing, converts Docker's nanosecond durations into systemd-style strings, links volumes, secrets, and configs to the services that use them, and validates the result against the published schema before writing it.
 3. Hand `inventory.json` to `swarm-to-quadlet` (rendering) and `systemd-migration-plan` (planning). Keep the raw directory next to it; reviewers will want to check a rendered unit against the original inspect output.
 
 ```bash
@@ -31,7 +31,7 @@ The schema lives in `references/inventory-schema.json` (JSON Schema 2020-12) and
 - `nodes[]`: hostname, role, availability, labels, engine labels, platform, and resources. Placement decisions later depend on labels, so the capture keeps every label verbatim.
 - `stacks[]`: stack names and the services each one owns, recovered from the `com.docker.stack.namespace` label.
 - `services[]`: the full service spec flattened to one level: image, command, environment, mode and replica count, placement constraints and preferences, networks with aliases, published ports with their publish mode, mounts, secrets, configs, healthcheck, resource limits and reservations, restart and update policy, and the observed task placement (which node each task runs on right now).
-- `networks[]`, `volumes[]`, `secrets[]`, `configs[]`: definitions plus a `used_by` list. Secret values are never captured; config payloads are captured because Swarm defines them as non-sensitive.
+- `networks[]`, `volumes[]`, `secrets[]`, `configs[]`: definitions plus a `used_by` list. Swarm secret values are never captured, environment values that look like credentials are redacted at capture and again at normalization, and config payloads are captured because Swarm defines them as non-sensitive. Volumes are listed for the capturing node only; mounts that reference a volume absent from the list are flagged.
 
 Two fields matter more than the rest for migration and deserve a second look after every capture. `services[].tasks[]` records where replicas actually run, which is the best evidence for which host should own a unit. `services[].ports[].mode` distinguishes `ingress` (the routing mesh, which systemd hosts do not have) from `host` (a plain published port, which maps directly).
 
@@ -47,7 +47,7 @@ Do not treat a clean capture as a clean estate. Look for these signs and report 
 
 ## Files
 
-- `scripts/capture.sh`: read-only capture on a manager node; requires `docker`, `jq` is optional. Produces `raw/*.json` and `manifest.json`.
+- `scripts/capture.sh`: read-only capture on a manager node; requires `docker` and `jq` (for redaction). Produces `raw/*.json` and `manifest.json`.
 - `scripts/normalize.ts`: Bun script, no dependencies; converts a capture directory into `inventory.json` and validates the required structure before writing.
 - `references/inventory-schema.json`: the inventory contract.
 - `references/field-notes.md`: where each inventory field comes from in the Docker API, and the conversions applied. Read it when a value looks surprising.

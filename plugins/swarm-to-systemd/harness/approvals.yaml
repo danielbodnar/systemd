@@ -10,11 +10,11 @@ default: ask
 rules:
   # Secret values are never read by an agent.
   - tool: bash
-    match: 'secrets/values'
+    match: 'secrets/values|/etc/swarm-migration/secrets|/etc/credstore|/run/credentials'
     decision: deny
     reason: secret values are off limits
   - tool: read
-    match: 'secrets/values'
+    match: 'secrets/values|/etc/swarm-migration/secrets|/etc/credstore|/run/credentials'
     decision: deny
     reason: secret values are off limits
   # Anything that changes the swarm or the host is denied outright; the

@@ -51,7 +51,7 @@ export async function worker(cfg: Config, opts: { once?: boolean }): Promise<num
   const tools = (ctx: AgentToolContext) => {
     ctx.allowedRoots = [...(ctx.allowedRoots ?? []), ...allowed_roots];
     ctx.readOnlyRoots = [...(ctx.readOnlyRoots ?? []), ...read_only_roots];
-    return betaAgentToolset20260401(ctx);
+    return guardTools(betaAgentToolset20260401(ctx), cfg.worker.denied_paths);
   };
 
   const w = new EnvironmentWorker({
@@ -90,4 +90,32 @@ function notifySystemd(state: string): void {
   } catch {
     // systemd-notify absent; readiness falls back to Type=exec semantics.
   }
+}
+
+const PATH_KEYS = ["path", "file_path", "pattern", "glob", "directory", "cwd"];
+
+/**
+ * Wrap the file tools so any input path (or bash command text) that matches a
+ * denied pattern is refused before execution. This runs on the worker host and
+ * therefore applies regardless of the server-side permission policy, which is
+ * what keeps `secrets/values` unreadable even for always_allow tools.
+ */
+export function guardTools<T extends { name: string; run: (input: any, ...rest: any[]) => any }>(tools: T[], deniedPatterns: string[]): T[] {
+  if (deniedPatterns.length === 0) return tools;
+  const regexes = deniedPatterns.map((p) => new RegExp(p));
+  const offending = (input: Record<string, unknown>): string | null => {
+    const candidates: string[] = [];
+    for (const k of PATH_KEYS) if (typeof input[k] === "string") candidates.push(input[k] as string);
+    if (typeof input.command === "string") candidates.push(input.command, ...input.command.split(/\s+/));
+    for (const c of candidates) for (const re of regexes) if (re.test(c)) return c;
+    return null;
+  };
+  return tools.map((tool) => ({
+    ...tool,
+    run: (input: any, ...rest: any[]) => {
+      const hit = offending(input ?? {});
+      if (hit) throw new Error(`refused by worker policy: ${tool.name} may not touch ${hit}`);
+      return tool.run(input, ...rest);
+    },
+  }));
 }

@@ -24,6 +24,13 @@ worker:
   memory_sync_interval_ms: 15000
   # Idle timeout for a claimed session before the worker releases it.
   max_idle_ms: 900000
+  # Paths the file tools refuse, enforced on this host regardless of the
+  # server-side permission policy. Regular expressions.
+  denied_paths:
+    - "(^|/)secrets/values(/|$)"
+    - "^/etc/credstore"
+    - "^/run/credentials"
+    - "^/etc/swarm-migration/secrets"
 
 session:
   # Default agent and environment, as lockfile paths (relative to the lockfile).

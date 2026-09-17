@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Inventory } from "../../skills/swarm-capture/scripts/types.ts";
-import { addHost, nodeSatisfies, parseConstraint, placeService, render } from "../../skills/swarm-to-quadlet/scripts/render.ts";
+import { addHost, nodeMatchesPlatform, nodeSatisfies, parseConstraint, placeService, render } from "../../skills/swarm-to-quadlet/scripts/render.ts";
 
 const inv = JSON.parse(readFileSync(resolve(import.meta.dir, "../../skills/swarm-capture/references/example-inventory.json"), "utf8")) as Inventory;
 
@@ -68,12 +68,12 @@ describe("render", () => {
     expect(app).toContain("Tmpfs=/tmp:size=67108864");
     expect(app).toContain("DropCapability=all");
     expect(app).toContain("AddHost=legacy.internal:10.0.9.9");
-    expect(app.match(/NetworkAlias=app/g)?.length).toBe(1);
+    expect((app as string).match(/NetworkAlias=app/g)?.length).toBe(1);
     expect(app).toContain("WantedBy=multi-user.target web.target");
   });
   test("mounts configs as read-only files and writes their payload", () => {
     expect(unit("swarm-mgr-1", "web_proxy.container")).toContain("Volume=/etc/containers/swarm-configs/web_caddyfile:/etc/caddy/Caddyfile:ro");
-    expect(result.files["hosts/swarm-mgr-1/etc/containers/swarm-configs/web_caddyfile"]).toContain(":80");
+    expect(new TextDecoder().decode(result.files["hosts/swarm-mgr-1/etc/containers/swarm-configs/web_caddyfile"] as Uint8Array)).toContain(":80");
   });
   test("pins digests and records host expectations", () => {
     expect(unit("swarm-mgr-1", "web_proxy.container")).toContain("Image=docker.io/library/caddy:2@sha256:");
@@ -94,5 +94,58 @@ describe("render", () => {
   test("selinux flag relabels bind mounts", () => {
     const r = render(inv, { outDir: "unused", selinux: true });
     expect(r.files["hosts/swarm-wrk-1/etc/containers/systemd/data_postgres.container"]).toContain("Volume=/srv/backups:/backups,Z");
+  });
+});
+
+describe("review fixes", () => {
+  test("platform constraints exclude incompatible nodes with architecture aliases", () => {
+    const [mgr] = inv.nodes;
+    expect(nodeMatchesPlatform(mgr, ["linux/amd64"])).toBe(true);
+    expect(nodeMatchesPlatform(mgr, ["linux/arm64"])).toBe(false);
+    expect(nodeMatchesPlatform(mgr, [])).toBe(true);
+    const app = inv.services.find((s) => s.name === "web_app")!;
+    const notes: string[] = [];
+    const placed = placeService({ ...app, placement: { ...app.placement, platforms: ["linux/arm64"] } }, inv.nodes, {}, notes);
+    expect(placed.size).toBe(0);
+    expect(notes[0]).toMatch(/platforms linux\/arm64/);
+  });
+  test("explicit zero durations are kept rather than defaulted", () => {
+    const app = inv.services.find((s) => s.name === "web_app")!;
+    const zero = { ...inv, services: [{ ...app, stop_grace_period: "0s", restart_policy: { ...app.restart_policy, delay: "0s" } }] };
+    const unit = render(zero, { outDir: "unused" }).files["hosts/swarm-wrk-1/etc/containers/systemd/web_app.container"] as string;
+    expect(unit).toContain("StopTimeout=0");
+    expect(unit).toContain("RestartSec=0");
+  });
+  test("rollback config and dropped service labels are noted", () => {
+    const proxy = inv.services.find((s) => s.name === "web_proxy")!;
+    const withRollback = { ...inv, services: [{ ...proxy, rollback_config: { parallelism: 2, delay: null, failure_action: "pause", monitor: null, max_failure_ratio: 0, order: "stop-first" } }] };
+    const r = render(withRollback, { outDir: "unused" });
+    expect(r.notes.some((n) => n.includes("rollback_config (stop-first, parallelism 2"))).toBe(true);
+    const app = render(inv, { outDir: "unused" });
+    expect(app.notes.some((n) => n.includes("service labels not rendered") && n.includes("traefik.enable"))).toBe(true);
+  });
+  test("config payloads are written as bytes with an ownership manifest", () => {
+    const r = render(inv, { outDir: "unused" });
+    const payload = r.files["hosts/swarm-mgr-1/etc/containers/swarm-configs/web_caddyfile"];
+    expect(payload).toBeInstanceOf(Uint8Array);
+    expect(r.files["hosts/swarm-mgr-1/etc/containers/swarm-configs/.manifest"]).toBe("web_caddyfile 0 0 0444\n");
+    const install = r.files["hosts/swarm-mgr-1/install.sh"] as string;
+    expect(install).toContain('chown "$uid:$gid" "/etc/containers/swarm-configs/$name"');
+    expect(install).toContain('-exec install -m 0644 {} "/etc/containers/swarm-configs/" \\;');
+    expect(install).toMatch(/if ! systemd-analyze verify[\s\S]*exit 1[\s\S]*if \[ "\$start" -eq 1 \]/);
+  });
+  test("a mount naming an uninventoried volume with driver options gets a synthesized .volume", () => {
+    const pg = inv.services.find((s) => s.name === "data_postgres")!;
+    const nfs = { ...inv, services: [{ ...pg, mounts: [{ type: "volume" as const, source: "shared_backups", target: "/backups", readonly: false, volume_driver: "local", volume_options: { type: "nfs", device: ":/export/backups", o: "addr=10.0.0.5,rw" } }] }] };
+    const r = render(nfs, { outDir: "unused" });
+    const vol = r.files["hosts/swarm-wrk-1/etc/containers/systemd/shared_backups.volume"] as string;
+    expect(vol).toContain("Type=nfs");
+    expect(vol).toContain("Device=:/export/backups");
+    expect(r.files["hosts/swarm-wrk-1/etc/containers/systemd/data_postgres.container"]).toContain("Volume=shared_backups.volume:/backups");
+  });
+  test("secret import reads from the operator directory outside the workspace", () => {
+    const script = render(inv, { outDir: "unused" }).files["hosts/swarm-wrk-1/secrets/import-secrets.sh"] as string;
+    expect(script).toContain("SWARM_SECRETS_DIR:-/etc/swarm-migration/secrets");
+    expect(script).not.toContain("secrets/values");
   });
 });

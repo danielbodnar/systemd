@@ -21,9 +21,11 @@ Every inventory field is derived from a documented Docker API object. This file 
 
 **Durations.** Docker stores durations as int64 nanoseconds. The normalizer converts them to systemd-style strings (`30s`, `1m30s`, `500ms`) because those strings are valid on both `systemd.unit` timeouts and Quadlet `Health*` keys, which means the renderer can copy them without a second conversion.
 
-**Environment redaction.** Any key matching password, pass, pwd, secret, token, api key, private key, credential, or auth is replaced with `<redacted>` and listed in `redacted_env`. Pass `--keep-env-values` to keep the values when the capture is stored somewhere with appropriate access control; the rendered units then carry those values in `Environment=` lines, which is rarely what a production host should do.
+**Environment redaction.** Redaction happens twice. `capture.sh` redacts values whose key matches password, pass, pwd, secret, token, api key, private key, credential, or auth before the raw file is written, and drops `PreviousSpec`, so the archived capture does not hold them (`--keep-env` retains everything and is a deliberate choice). The normalizer applies the same key test and additionally a value test for URI userinfo with a password (`scheme://user:pass`) and `password=`-style pairs inside a value; matches become `<redacted>` and are listed in `redacted_env`. `--keep-env-values` on the normalizer only keeps what the capture kept.
 
 **Image references.** `image@sha256:...` is split into `image` and `image_digest`. A missing digest raises a warning because the migrated host will resolve the tag independently and may run a different build than the swarm did.
+
+**Volumes are node-local.** `docker volume ls` on the capturing manager lists that node's volumes only. A service mount that names a volume absent from the capture produces a warning naming the nodes that run the service; capture there, or inspect the volume by hand, before planning storage.
 
 **Service names.** `name` is the full Swarm name (`stack_service`); `short_name` strips the stack prefix. Quadlet units are named from the full name so two stacks with a `db` service do not collide.
 

@@ -38,7 +38,7 @@ export interface HostPlan {
 }
 
 export interface RenderResult {
-  files: Record<string, string>;
+  files: Record<string, string | Uint8Array>;
   hosts: Record<string, HostPlan>;
   notes: string[];
 }
@@ -51,6 +51,21 @@ export function parseConstraint(raw: string): Constraint | null {
   const m = raw.match(/^\s*([\w.\-/]+)\s*(==|!=)\s*(.+?)\s*$/);
   if (!m) return null;
   return { key: m[1], op: m[2] as "==" | "!=", value: m[3] };
+}
+
+const ARCH_ALIASES: Record<string, string> = { amd64: "x86_64", x86_64: "x86_64", arm64: "aarch64", aarch64: "aarch64", arm: "arm", armv7l: "arm", "386": "i386", i386: "i386", ppc64le: "ppc64le", s390x: "s390x", riscv64: "riscv64" };
+
+export function normalizeArch(a: string): string {
+  return ARCH_ALIASES[a.toLowerCase()] ?? a.toLowerCase();
+}
+
+/** True when the node satisfies at least one of the service's platform constraints (or none are set). */
+export function nodeMatchesPlatform(node: Node, platforms: string[]): boolean {
+  if (platforms.length === 0) return true;
+  return platforms.some((p) => {
+    const [os, arch] = p.split("/");
+    return (!os || os.toLowerCase() === node.os.toLowerCase()) && (!arch || normalizeArch(arch) === normalizeArch(node.arch));
+  });
 }
 
 function nodeValue(node: Node, key: string): string | undefined {
@@ -84,9 +99,9 @@ export function placeService(svc: Service, nodes: Node[], opts: { hostMap?: Reco
     for (const h of override) placement.set(h, (placement.get(h) ?? 0) + 1);
     return placement;
   }
-  const candidates = nodes.filter((n) => n.availability === "active" && n.state === "ready" && nodeSatisfies(n, svc.placement.constraints));
+  const candidates = nodes.filter((n) => n.availability === "active" && n.state === "ready" && nodeSatisfies(n, svc.placement.constraints) && nodeMatchesPlatform(n, svc.placement.platforms));
   if (candidates.length === 0) {
-    notes.push(`${svc.name}: no node satisfies constraints ${JSON.stringify(svc.placement.constraints)}; rendered nowhere, add a host-map entry`);
+    notes.push(`${svc.name}: no node satisfies constraints ${JSON.stringify(svc.placement.constraints)}${svc.placement.platforms.length ? ` and platforms ${svc.placement.platforms.join(", ")}` : ""}; rendered nowhere, add a host-map entry`);
     return placement;
   }
   if (svc.mode === "global" || svc.mode === "global-job") {
@@ -187,7 +202,8 @@ function healthCmd(test: string[]): string | null {
 export function render(inv: Inventory, opts: RenderOptions): RenderResult {
   const unitDir = opts.unitDir ?? "/etc/containers/systemd";
   const configDir = opts.configDir ?? "/etc/containers/swarm-configs";
-  const files: Record<string, string> = {};
+  const files: Record<string, string | Uint8Array> = {};
+  const configManifest = new Map<string, string[]>(); // host -> "name uid gid mode" lines
   const hosts: Record<string, HostPlan> = {};
   const notes: string[] = [];
   const netByRef = new Map<string, (typeof inv.networks)[number]>();
@@ -202,10 +218,11 @@ export function render(inv: Inventory, opts: RenderOptions): RenderResult {
     hosts[name] ??= { hostname: name, units: [], containers: [], ports: [], networks: [], volumes: [], secrets: [], targets: [] };
     return hosts[name];
   };
-  const put = (hostname: string, rel: string, content: string) => {
+  const put = (hostname: string, rel: string, content: string | Uint8Array) => {
     files[join("hosts", hostname, rel)] = content;
   };
   const stackUnits = new Map<string, Map<string, string[]>>(); // host -> stack -> units
+  const synthesizedVolumes = new Map<string, { host: string; driver: string; options: Record<string, string> }>();
 
   for (const svc of [...inv.services].sort((a, b) => a.name.localeCompare(b.name))) {
     const placement = placeService(svc, inv.nodes, opts, notes);
@@ -213,7 +230,10 @@ export function render(inv: Inventory, opts: RenderOptions): RenderResult {
     if (svc.ports.some((p) => p.mode === "ingress")) {
       notes.push(`${svc.name}: ingress-mode ports become per-host published ports; front them with an external load balancer or DNS round robin`);
     }
-    if (svc.update_config) notes.push(`${svc.name}: update_config (${svc.update_config.order}, parallelism ${svc.update_config.parallelism}) has no systemd equivalent; roll hosts one at a time${opts.autoUpdate ? ", AutoUpdate=registry is enabled" : ""}`);
+    if (svc.update_config) notes.push(`${svc.name}: update_config (${svc.update_config.order}, parallelism ${svc.update_config.parallelism}, on failure ${svc.update_config.failure_action}) has no systemd equivalent; roll hosts one at a time${opts.autoUpdate ? ", AutoUpdate=registry is enabled" : ""}`);
+    if (svc.rollback_config) notes.push(`${svc.name}: rollback_config (${svc.rollback_config.order}, parallelism ${svc.rollback_config.parallelism}, on failure ${svc.rollback_config.failure_action}) has no systemd equivalent; the runbook's rollback step must reproduce it`);
+    const droppedLabels = Object.keys(svc.labels).filter((k) => !k.startsWith("com.docker."));
+    if (droppedLabels.length) notes.push(`${svc.name}: service labels not rendered (add them as Label= lines if a host-side tool reads them): ${droppedLabels.join(", ")}`);
     if (svc.privileged) notes.push(`${svc.name}: privileged; review AddCapability lines before installing`);
     if (svc.logging.driver && svc.logging.driver !== "journald") notes.push(`${svc.name}: log driver ${svc.logging.driver} rendered as journald`);
 
@@ -282,9 +302,13 @@ export function render(inv: Inventory, opts: RenderOptions): RenderResult {
             if (vol) {
               u.add("Container", "Volume", `${vol.name}.volume:${m.target}${ro}`);
               if (!plan.volumes.includes(vol.name)) plan.volumes.push(vol.name);
+            } else if (m.volume_driver || (m.volume_options && Object.keys(m.volume_options).length)) {
+              synthesizedVolumes.set(m.source, { host: hostname, driver: m.volume_driver ?? "local", options: m.volume_options ?? {} });
+              u.add("Container", "Volume", `${m.source}.volume:${m.target}${ro}`);
+              notes.push(`${svc.name}: volume ${m.source} was not in the inventory; a .volume unit was synthesized from the mount's driver options (${m.volume_driver ?? "local"}); verify them on ${hostname}`);
             } else {
               u.add("Container", "Volume", `${m.source}:${m.target}${ro}`);
-              notes.push(`${svc.name}: volume ${m.source} was not in the inventory; Podman will create an empty named volume`);
+              notes.push(`${svc.name}: volume ${m.source} was not in the inventory; Podman will create an empty named volume on ${hostname}, so copy its data there first`);
             }
           } else if (m.type === "bind" && m.source) {
             const prop = m.bind_propagation ? `,${m.bind_propagation}` : "";
@@ -309,7 +333,8 @@ export function render(inv: Inventory, opts: RenderOptions): RenderResult {
           u.add("Container", "Volume", `${path}:${c.target}:ro${opts.selinux ? ",z" : ""}`);
           const def = cfgByName.get(c.name);
           if (def?.data_base64) {
-            put(hostname, `etc/containers/swarm-configs/${c.name}`, Buffer.from(def.data_base64, "base64").toString("utf8"));
+            put(hostname, `etc/containers/swarm-configs/${c.name}`, new Uint8Array(Buffer.from(def.data_base64, "base64")));
+            configManifest.set(hostname, [...(configManifest.get(hostname) ?? []), `${c.name} ${c.uid} ${c.gid} ${octal(c.mode)}`]);
           } else {
             notes.push(`${svc.name}: config ${c.name} has no payload in the inventory; place it at ${path} on ${hostname}`);
           }
@@ -338,13 +363,13 @@ export function render(inv: Inventory, opts: RenderOptions): RenderResult {
         if (svc.init) u.add("Container", "RunInit", "true");
         u.add("Container", "StopSignal", svc.stop_signal);
         const grace = durationToSeconds(svc.stop_grace_period);
-        u.add("Container", "StopTimeout", grace ? Math.round(grace) : 10);
+        u.add("Container", "StopTimeout", grace === null ? 10 : Math.round(grace));
         u.add("Container", "LogDriver", "journald");
         if (svc.resources.limits.pids) u.add("Container", "PidsLimit", svc.resources.limits.pids);
 
         u.add("Service", "Restart", isJob ? "no" : ({ any: "always", "on-failure": "on-failure", none: "no" } as const)[svc.restart_policy.condition]);
         const delay = durationToSeconds(svc.restart_policy.delay);
-        u.add("Service", "RestartSec", delay ? Math.round(delay) : 5);
+        u.add("Service", "RestartSec", delay === null ? 5 : Math.round(delay));
         u.add("Service", "TimeoutStartSec", "900");
         u.add("Service", "CPUQuota", cpuQuota(svc.resources.limits.nano_cpus));
         if (svc.resources.limits.memory_bytes) u.add("Service", "MemoryMax", svc.resources.limits.memory_bytes);
@@ -411,6 +436,20 @@ export function render(inv: Inventory, opts: RenderOptions): RenderResult {
       put(plan.hostname, `etc/systemd/system/${stack}.target`, t.render(["Unit", "Install"]));
       plan.targets.push(`${stack}.target`);
     }
+    for (const [name, v] of synthesizedVolumes) {
+      if (v.host !== plan.hostname) continue;
+      const u = new Unit([`Synthesized from a service mount's volume options; the volume was not inventoried on the capturing node`]);
+      u.add("Unit", "Description", `${name} (migrated from Docker Swarm)`);
+      u.add("Volume", "VolumeName", name);
+      if (v.driver !== "local") u.add("Volume", "Driver", v.driver);
+      if (v.options.type) u.add("Volume", "Type", v.options.type);
+      if (v.options.device) u.add("Volume", "Device", v.options.device);
+      if (v.options.o) u.add("Volume", "Options", v.options.o);
+      put(plan.hostname, `${unitDir.replace(/^\//, "")}/${name}.volume`, u.render(["Unit", "Volume"]));
+      if (!plan.volumes.includes(name)) plan.volumes.push(name);
+    }
+    const manifest = configManifest.get(plan.hostname) ?? [];
+    if (manifest.length) put(plan.hostname, "etc/containers/swarm-configs/.manifest", manifest.join("\n") + "\n");
     put(plan.hostname, "secrets/import-secrets.sh", importScript(plan.secrets));
     put(plan.hostname, "install.sh", installScript(plan, unitDir, configDir));
   }
@@ -428,10 +467,13 @@ function importScript(secrets: string[]): string {
   return `#!/usr/bin/env bash
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Import the Podman secrets this host's units reference.
-# Place each value in secrets/values/<name> (mode 0600) before running; the
-# renderer never writes secret values and this script never prints them.
+# Values are read from $SWARM_SECRETS_DIR (default /etc/swarm-migration/secrets),
+# a root-only directory outside any agent workspace, one file per secret named
+# after the secret (mode 0600). The renderer never writes secret values and
+# this script never prints them.
 set -euo pipefail
-dir="$(cd "$(dirname "$0")" && pwd)/values"
+dir="\${SWARM_SECRETS_DIR:-/etc/swarm-migration/secrets}"
+[ -d "$dir" ] || { echo "secrets directory $dir does not exist; create it (mode 0700) and add one file per secret" >&2; exit 1; }
 missing=0
 for name in ${list.map((s) => `'${s}'`).join(" ")}; do
     if [ ! -f "$dir/$name" ]; then
@@ -457,14 +499,23 @@ start=0
 [ "\${1:-}" = "--start" ] && start=1
 install -d -m 0755 "${unitDir}" "${configDir}" /etc/systemd/system
 if [ -d "$here/etc/containers/swarm-configs" ]; then
-    install -m 0644 "$here/etc/containers/swarm-configs/"* "${configDir}/"
+    find "$here/etc/containers/swarm-configs" -maxdepth 1 -type f ! -name .manifest -exec install -m 0644 {} "${configDir}/" \\;
 fi
 install -m 0644 "$here${unitDir}/"* "${unitDir}/"
 if ls "$here/etc/systemd/system/"*.target >/dev/null 2>&1; then
     install -m 0644 "$here/etc/systemd/system/"*.target /etc/systemd/system/
 fi
+if [ -f "$here/etc/containers/swarm-configs/.manifest" ]; then
+    while read -r name uid gid mode; do
+        [ -n "$name" ] || continue
+        chown "$uid:$gid" "${configDir}/$name" && chmod "$mode" "${configDir}/$name"
+    done < "$here/etc/containers/swarm-configs/.manifest"
+fi
 systemctl daemon-reload
-systemd-analyze verify ${plan.units.join(" ")} || echo "systemd-analyze reported problems; review before starting" >&2
+if ! systemd-analyze verify ${plan.units.join(" ")}; then
+    echo "systemd-analyze verify failed; units are installed but not started. Fix the rendered tree and re-run." >&2
+    exit 1
+fi
 if [ "$start" -eq 1 ]; then
     systemctl enable --now ${plan.targets.join(" ")} ${plan.units.join(" ")}
 fi

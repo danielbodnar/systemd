@@ -32,7 +32,16 @@ done
 command -v systemd-creds >/dev/null || { echo "systemd-creds not available" >&2; exit 1; }
 
 echo "installing harness from $source_dir to $prefix/harness"
-install -d -m 0750 "$prefix" /etc/swarm-agent /etc/credstore.encrypted /var/lib/swarm-agent/workspace /mnt/memory
+install -m 0644 "$source_dir/systemd/swarm-agent.sysusers.conf" /etc/sysusers.d/swarm-agent.conf
+systemd-sysusers /etc/sysusers.d/swarm-agent.conf
+install -d -m 0755 "$prefix" /etc/swarm-agent /etc/credstore.encrypted
+install -d -m 0750 -o swarm-agent -g swarm-agent /var/lib/swarm-agent /var/lib/swarm-agent/workspace /mnt/memory
+install -d -m 0700 /etc/swarm-migration/secrets
+if getent group docker >/dev/null; then
+    echo "swarm-agent joins the docker group so the auditor can read the swarm"
+else
+    echo "no docker group on this host; the worker unit's SupplementaryGroups=docker line is inert here"
+fi
 rm -rf "$prefix/harness"
 cp -a "$source_dir" "$prefix/harness"
 # The plugin's skills are referenced relative to the harness; keep them adjacent.
@@ -42,10 +51,13 @@ if [ -d "$source_dir/../skills" ]; then
 fi
 (cd "$prefix/harness" && "$bun_bin" install --frozen-lockfile --production 2>/dev/null || "$bun_bin" install --production)
 
-[ -f /etc/swarm-agent/swarm-agent.yaml ] || install -m 0640 "$source_dir/swarm-agent.yaml" /etc/swarm-agent/swarm-agent.yaml
-[ -f /etc/swarm-agent/approvals.yaml ] || install -m 0640 "$source_dir/approvals.yaml" /etc/swarm-agent/approvals.yaml
+[ -f /etc/swarm-agent/swarm-agent.yaml ] || install -m 0640 -g swarm-agent "$source_dir/swarm-agent.yaml" /etc/swarm-agent/swarm-agent.yaml
+[ -f /etc/swarm-agent/approvals.yaml ] || install -m 0640 -g swarm-agent "$source_dir/approvals.yaml" /etc/swarm-agent/approvals.yaml
 printf 'ANTHROPIC_ENVIRONMENT_ID=%s\n' "$environment_id" > /etc/swarm-agent/worker.env
+chown root:swarm-agent /etc/swarm-agent/worker.env
 chmod 0640 /etc/swarm-agent/worker.env
+chown -R root:swarm-agent "$prefix"
+chmod -R g+rX "$prefix"
 
 if [ ! -f /etc/credstore.encrypted/swarm-agent.environment-key ]; then
     echo "paste the environment key (sk-ant-oat01-...) and press Enter; input is not echoed:"

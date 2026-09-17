@@ -27,7 +27,7 @@ There are two machines in play, and they hold different credentials.
 
 The **operator machine** has the `ant` CLI, a Claude API key or OAuth profile with access to the workspace, and this directory. It runs `swarm-agent apply`, `swarm-agent run`, `swarm-agent status`, and `swarm-agent connect`.
 
-The **production host** (a Swarm manager, or a target systemd host) runs `swarm-agent worker` under the provided unit. It holds only an environment key, delivered as an encrypted systemd credential, and never an organization API key; the worker refuses to start if it finds one in its environment. Tool calls from the agents execute here, confined to the workspace for file tools, and gated by the approval policy for bash on the agents that can change anything.
+The **production host** (a Swarm manager, or a target systemd host) runs `swarm-agent worker` under the provided unit as the unprivileged `swarm-agent` user, with `ProtectSystem=strict`, an empty capability bounding set, and a system-call filter. It holds only an environment key, delivered as an encrypted systemd credential, and never an organization API key; the worker refuses to start if it finds one in its environment. Tool calls from the agents execute here: file tools are confined to the workspace plus `allowed_roots` and refuse `denied_paths`, and bash on the agents that can change anything is gated by the approval policy. The docker group gives the auditor read access to the swarm; nothing grants root, so installing units, importing secrets, and live verification of rootful Podman remain operator steps from the runbook.
 
 ## Setup
 
@@ -83,7 +83,7 @@ The policy only applies to calls that pause. The auditor's tools run under the s
 
 ## Security notes
 
-The worker executes whatever bash the agents are allowed to run, on a host you care about. Three layers stand between the agent and a mistake: the server-side permission policies on each agent, this harness's approval policy, and the fact that the plan tells the operator what to run instead of letting the agent run it. Keep `install.sh` and `import-secrets.sh` denied in the policy, keep `secrets/values/` out of the workspace the agent can read, and treat the environment key like any other host secret: it is bound to one environment, stored encrypted with `systemd-creds`, and rotated from the Console if exposed. Web search and fetch are disabled on every agent; the migration needs no internet.
+The worker executes whatever bash the agents are allowed to run, on a host you care about. Three layers stand between the agent and a mistake: the server-side permission policies on each agent, this harness's approval policy, and the fact that the plan tells the operator what to run instead of letting the agent run it. Keep `install.sh` and `import-secrets.sh` denied in the policy, keep secret values in `/etc/swarm-migration/secrets/` (which the worker refuses to read on top of the policy), and treat the environment key like any other host secret: it is bound to one environment, stored encrypted with `systemd-creds`, and rotated from the Console if exposed. Web search and fetch are disabled on every agent; the migration needs no internet.
 
 ## Development
 

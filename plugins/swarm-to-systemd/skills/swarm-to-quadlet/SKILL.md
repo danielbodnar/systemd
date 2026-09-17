@@ -34,7 +34,7 @@ rendered/
     etc/containers/systemd/     <service>.container, <network>.network, <volume>.volume
     etc/containers/swarm-configs/  config payloads mounted read-only
     etc/systemd/system/<stack>.target
-    secrets/import-secrets.sh   creates Podman secrets from files the operator supplies
+    secrets/import-secrets.sh   creates Podman secrets from /etc/swarm-migration/secrets (operator-supplied, outside the workspace)
 ```
 
 Unit names use the full Swarm service name (`web_app.container` becomes `web_app.service`) so two stacks with a service called `db` cannot collide. Each stack gets a `<stack>.target` that wants its units, which gives operators a single `systemctl start web.target`.
@@ -47,7 +47,7 @@ Unit names use the full Swarm service name (`web_app.container` becomes `web_app
 
 **Overlay becomes bridge plus transport.** Podman networks are host-local. The renderer emits a `.network` per host with the original subnet so container addressing and DNS aliases keep working within a host; cross-host traffic needs a routed underlay or WireGuard, which the planning skill designs.
 
-**Secrets never touch the rendered tree.** Swarm secrets become `Secret=name,type=mount,...` references and redacted environment values become `Secret=name,type=env,...`. `secrets/import-secrets.sh` creates them from files the operator places under `secrets/values/`. Configs are non-secret in Swarm and are written out as files.
+**Secrets never touch the rendered tree.** Swarm secrets become `Secret=name,type=mount,...` references and redacted environment values become `Secret=name,type=env,...`. `secrets/import-secrets.sh` creates them from one file per secret under `/etc/swarm-migration/secrets/`, a root-only directory outside any agent workspace. Configs are non-secret in Swarm and are written out as files with their captured ownership and mode.
 
 **Resource limits use systemd's cgroup properties.** Quadlet defaults to `CgroupsMode=split`, which places the container in the service's cgroup, so `CPUQuota=`, `MemoryMax=`, `MemoryLow=`, and `TasksMax=` in `[Service]` apply directly and remain visible in `systemctl status` and `systemd-cgtop`.
 

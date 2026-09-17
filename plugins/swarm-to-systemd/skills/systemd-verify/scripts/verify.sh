@@ -101,7 +101,7 @@ if [ "$mode" = "dry-run" ]; then
                     if err="$(systemd-analyze verify "$tmp/$u" 2>&1)"; then
                         record ok "systemd-analyze" "$u"
                     else
-                        record warn "systemd-analyze" "$u: $(echo "$err" | head -1 | cut -c1-200)"
+                        record fail "systemd-analyze" "$u: $(echo "$err" | head -1 | cut -c1-200)"
                     fi
                 fi
             done
@@ -151,7 +151,7 @@ if [ "$mode" = "live" ]; then
             record fail "container-exists" "$c not found"
         fi
     done
-    listening="$(ss -ltunH 2>/dev/null | awk '{print $1, $5}')"
+    listening="$(ss -ltunSH 2>/dev/null | awk '{print $1, $5}')"
     for p in "${exp_ports[@]}"; do
         port="${p%/*}"; proto="${p#*/}"
         if echo "$listening" | awk -v port="$port" -v proto="$proto" '$1==proto && $2 ~ (":" port "$") {found=1} END{exit !found}'; then

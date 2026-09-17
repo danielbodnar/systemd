@@ -2,8 +2,15 @@
 #
 # Self-hosted Managed Agents worker for the swarm-to-systemd harness.
 # The worker long-polls Anthropic's work queue (outbound only) and executes the
-# agent's bash and file tools on this host. It holds the environment key as a
-# systemd credential and never an organization API key.
+# agent's bash and file tools on this host as the unprivileged swarm-agent
+# user. It holds the environment key as a systemd credential and never an
+# organization API key.
+#
+# Access the agents need is granted by group membership, not by root: the
+# docker group for the read-only capture on a manager node, and nothing else
+# by default. Rootful Podman and system unit installation stay operator steps
+# in the runbook; the verifier's live mode on rootful Podman therefore runs
+# from the operator's shell, not from this worker.
 #
 # Install: see install-worker.sh. Key: systemd-creds encrypt --name=environment-key
 #          - /etc/credstore.encrypted/swarm-agent.environment-key
@@ -19,6 +26,9 @@ StartLimitBurst=5
 [Service]
 Type=notify
 NotifyAccess=all
+User=swarm-agent
+Group=swarm-agent
+SupplementaryGroups=docker
 Slice=swarm-agent.slice
 WorkingDirectory=/opt/swarm-agent/harness
 ExecStart=/usr/local/bin/bun run src/cli.ts worker --config /etc/swarm-agent/swarm-agent.yaml
@@ -27,22 +37,30 @@ EnvironmentFile=-/etc/swarm-agent/worker.env
 Environment=HOME=/var/lib/swarm-agent
 StateDirectory=swarm-agent
 LogsDirectory=swarm-agent
-# The worker must reach the docker socket (audit) and Podman (verification);
-# it runs as root for that reason and relies on the approval policy, the
-# always_ask bash policy on writer agents, and the file-tool confinement for
-# safety. Tighten User= and the sandboxing below on hosts where the agent only
-# needs read access.
 UMask=0027
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/swarm-agent /mnt/memory
 PrivateTmp=yes
+PrivateDevices=yes
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectKernelLogs=yes
+ProtectControlGroups=yes
 ProtectClock=yes
+ProtectHostname=yes
 RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
 LockPersonality=yes
+MemoryDenyWriteExecute=no
 SystemCallArchitectures=native
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
-ReadWritePaths=/var/lib/swarm-agent /mnt/memory
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 Restart=on-failure
 RestartSec=10s
 KillSignal=SIGTERM

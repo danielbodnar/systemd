@@ -84,7 +84,7 @@ export async function runSession(opts: RunOptions): Promise<RunResult> {
   const kickoff: Anthropic.Beta.Sessions.EventSendParams["events"] = opts.rubric
     ? [{
         type: "user.define_outcome",
-        description: opts.title,
+        description: opts.message ?? opts.title,
         rubric: { type: "text", content: opts.rubric },
         ...(opts.maxIterations ? { max_iterations: opts.maxIterations } : {}),
       }]
@@ -101,10 +101,12 @@ export async function runSession(opts: RunOptions): Promise<RunResult> {
     const verdict = evaluate(opts.policy, ev.name, ev.input as Record<string, unknown>);
     let allow = verdict.decision === "allow";
     let denyMessage: string | undefined;
-    if (opts.approveAll) {
-      allow = true;
+    if (verdict.decision === "deny") {
+      denyMessage = verdict.reason;
     } else if (verdict.decision === "ask") {
-      if (opts.interactive && process.stdin.isTTY) {
+      if (opts.approveAll) {
+        allow = true;
+      } else if (opts.interactive && process.stdin.isTTY) {
         const a = await askOperator(ev.name, verdict.subject, verdict.reason);
         allow = a.allow;
         denyMessage = a.message;
@@ -112,8 +114,6 @@ export async function runSession(opts: RunOptions): Promise<RunResult> {
         allow = false;
         denyMessage = "no operator available to approve this call; it is not covered by the approval policy";
       }
-    } else if (verdict.decision === "deny") {
-      denyMessage = verdict.reason;
     }
     log(`[tool ${allow ? "allow" : "deny"}] ${ev.name}: ${verdict.subject.slice(0, 160)} (${verdict.reason})`);
     const threadId = "session_thread_id" in ev && ev.session_thread_id ? { session_thread_id: ev.session_thread_id } : {};

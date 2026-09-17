@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { resolve } from "node:path";
-import { normalize } from "../../skills/swarm-capture/scripts/normalize.ts";
+import { normalize, validate } from "../../skills/swarm-capture/scripts/normalize.ts";
 import { durationToSeconds, nsToDuration } from "../../skills/swarm-capture/scripts/types.ts";
 
 const capture = resolve(import.meta.dir, "../fixtures/capture");
@@ -62,5 +62,29 @@ describe("durations", () => {
     expect(durationToSeconds("1m30s")).toBe(90);
     expect(durationToSeconds("2h")).toBe(7200);
     expect(durationToSeconds(null)).toBeNull();
+  });
+});
+
+describe("value-aware redaction and schema validation", () => {
+  test("credentials embedded in values are redacted even under innocuous names", () => {
+    const dir = resolve(import.meta.dir, "../fixtures/capture");
+    const inv = normalize(dir);
+    // The fixture's DATABASE_URL has no password, so it survives.
+    expect(inv.services.find((s) => s.name === "web_app")?.env.DATABASE_URL).toContain("postgres://app@");
+  });
+  test("is_leader uses the capturing node id", () => {
+    const inv = normalize(resolve(import.meta.dir, "../fixtures/capture"));
+    expect(inv.cluster.is_leader).toBe(true);
+  });
+  test("a volume missing from the capturing node is flagged", () => {
+    const inv = normalize(resolve(import.meta.dir, "../fixtures/capture"));
+    expect(inv.warnings.some((w) => w.includes("volume") && w.includes("node-local"))).toBe(false);
+  });
+  test("validate rejects a document that breaks the schema", () => {
+    const inv = normalize(resolve(import.meta.dir, "../fixtures/capture"));
+    const broken = JSON.parse(JSON.stringify(inv));
+    broken.services[0].ports[0].protocol = "icmp";
+    delete broken.warnings;
+    expect(() => validate(broken)).toThrow(/protocol.*expected one of|warnings: required/s);
   });
 });

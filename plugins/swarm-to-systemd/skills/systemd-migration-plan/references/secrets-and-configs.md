@@ -4,9 +4,9 @@ Swarm distributed secrets from the Raft store and mounted them as tmpfs files; c
 
 ## Podman secrets (default)
 
-The rendered units reference Podman secrets by name (`Secret=name,type=mount,...` for file secrets, `Secret=name,type=env,...` for redacted environment values), and each host's `secrets/import-secrets.sh` creates them with `podman secret create --replace` from files under `secrets/values/`. Podman stores secrets in its own driver (file-backed by default, `shell` and `pass` drivers exist) and mounts them into the container at start. This is the least surprising path for a team that already thinks in Docker secrets.
+The rendered units reference Podman secrets by name (`Secret=name,type=mount,...` for file secrets, `Secret=name,type=env,...` for redacted environment values), and each host's `secrets/import-secrets.sh` creates them with `podman secret create --replace` from one file per secret under `/etc/swarm-migration/secrets/` (override with `SWARM_SECRETS_DIR`). That directory is root-owned, mode 0700, and outside every agent workspace, so no rendered tree and no session ever contains a value. Podman stores secrets in its own driver (file-backed by default, `shell` and `pass` drivers exist) and mounts them into the container at start. This is the least surprising path for a team that already thinks in Docker secrets.
 
-Feed the values from wherever they live today: a password manager CLI (`op read`, `bw get`), an external secret manager, or an operator typing them once. Never commit `secrets/values/` and never let the migration agent read values in a session whose transcript is stored; an agent should run the import script, not inspect its inputs.
+Feed the values from wherever they live today: a password manager CLI (`op read`, `bw get`), an external secret manager, or an operator typing them once. Never place the directory inside a repository or an agent workspace, and never let a migration agent read it; the import script is an operator step in the runbook, and the harness denies the path to agents outright.
 
 ## systemd credentials
 
