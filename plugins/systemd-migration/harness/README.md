@@ -65,10 +65,11 @@ The capture needs to read the Docker API on a manager, and the worker has no soc
 Each named task starts a session for one agent with a kickoff message and, where the deliverable is checkable, an outcome rubric the platform grades until it passes. Run them in order from the operator machine while the worker is polling:
 
 ```bash
-bun run src/cli.ts run capture      # swarm-auditor writes inventory.json in the workspace
-bun run src/cli.ts run render       # unit-author renders and resolves notes
+bun run src/cli.ts run capture      # swarm-auditor writes inventory.json and hosts/ in the workspace
+bun run src/cli.ts run plan         # migration-lead drafts plan.yaml and walks its decisions with you
+bun run src/cli.ts run render       # unit-author renders the approved plan and resolves notes
 bun run src/cli.ts run verify       # cutover-verifier dry-runs this host
-bun run src/cli.ts run migrate      # migration-lead coordinates all three and writes MIGRATION-PLAN.md
+bun run src/cli.ts run migrate      # migration-lead coordinates discovery, plan, render, verify, and writes MIGRATION-PLAN.md
 ```
 
 `run` opens the event stream before it sends the kickoff, prints agent messages to stdout, and logs tool activity to stderr. When a tool call pauses for confirmation, the approval policy decides first; anything it marks `ask` prompts you at the terminal, or is denied with an explanation when there is no terminal. `--approve-all` exists for lab environments and says so loudly. `--message` runs an ad-hoc prompt against the default agent, `--agent` and `--environment` accept lockfile paths, and `--budget-cents` overrides the per-session cap from the config.

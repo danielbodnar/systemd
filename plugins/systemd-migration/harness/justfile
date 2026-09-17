@@ -37,7 +37,7 @@ apply *ARGS:
 doctor:
     bun run src/cli.ts doctor
 
-# Start a session for a named task (capture, render, verify, migrate).
+# Start a session for a named task (capture, plan, render, verify, migrate).
 run TASK *ARGS:
     bun run src/cli.ts run {{TASK}} {{ARGS}}
 

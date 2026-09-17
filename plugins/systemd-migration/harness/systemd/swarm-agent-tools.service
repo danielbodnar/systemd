@@ -45,7 +45,7 @@ ReadWritePaths=/var/lib/swarm-agent/workspace /mnt/memory
 # Bash runs inside this sandbox: the host is read-only apart from the two
 # paths above, and the secret and credential directories do not exist from
 # its point of view.
-InaccessiblePaths=-/etc/swarm-migration/secrets -/etc/credstore -/etc/credstore.encrypted -/run/credentials
+InaccessiblePaths=-/etc/swarm-migration/secrets -/etc/credstore -/etc/credstore.encrypted -/run/credentials -/var/lib/portables -/var/lib/extensions -/var/lib/confexts
 PrivateTmp=yes
 PrivateDevices=yes
 ProtectKernelTunables=yes

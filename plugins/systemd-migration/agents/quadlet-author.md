@@ -1,6 +1,6 @@
 ---
-name: unit-author
-description: Renders and hand-tunes Podman Quadlet units from a Swarm inventory. Use it to produce the per-host unit tree, apply a host map, resolve the renderer's notes into concrete unit edits, and prepare secret import and install scripts; it writes only inside the rendered output directory.
+name: quadlet-author
+description: Renders and hand-tunes Podman Quadlet units for the services the plan keeps on Podman (form quadlet), or the whole inventory through the one-call Quadlet renderer for a first look. Use it to resolve the renderer's notes into concrete unit edits and to prepare secret import and install scripts; it writes only inside the rendered output directory.
 model: opus
 effort: high
 tools: [Bash, Read, Write, Edit, Grep, Glob]

@@ -8,11 +8,11 @@ Which stacks and hosts are in scope, the inventory capture date, and what is exp
 
 ## 2. Decisions
 
-The user's answers to the five planning questions, each as a single sentence with the reasoning. This section is what future readers will look for first.
+Every decision in `plan.yaml` that had no default, as a table: decision id, subject, chosen value, and the user's reason. Then the defaulted decisions the user changed. Point at `plan.yaml` for the full list; this section is what future readers will look for first.
 
 ## 3. Host mapping
 
-A table with one row per service: service, stack, mode and replica count on Swarm, target hosts, state-bearing (yes or no), and the reason for the placement. Reference the `host-map.json` that was fed to the renderer.
+A table with one row per service: service, stack, mode and replica count on the source, target hosts (the `placement.hosts.<service>` decision), form (the `form.service.<service>` decision), state-bearing (yes or no), and the reason.
 
 ## 4. Networking
 
@@ -20,7 +20,7 @@ For each network in the inventory: whether it spans hosts, the replacement trans
 
 ## 5. Secrets and configs
 
-A table of every Podman secret: name, consuming units, source of the value, importer, rotation owner. A second table for configs: name, file path on the host, consuming units, managed by which configuration tool.
+A table of every credential: name, store (from the `creds.store.<name>` decision), consuming units, source of the value, importer, rotation owner. A second table for configs: name, file path on the host, consuming units, managed by which configuration tool.
 
 ## 6. Storage
 

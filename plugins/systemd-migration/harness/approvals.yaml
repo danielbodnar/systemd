@@ -36,7 +36,7 @@ rules:
     decision: deny
     reason: host paths are installed by the runbook, never by an agent
   - tool: write
-    match: '(^|/)(rendered|reports|capture[^/]*)/|(^|/)(MIGRATION-PLAN\.md|inventory\.json|host-map\.json)$'
+    match: '(^|/)(rendered|reports|hosts|capture[^/]*)/|(^|/)(MIGRATION-PLAN\.md|inventory\.json|host-map\.json|plan\.yaml|QUESTIONS\.md)$'
     decision: allow
     reason: migration artifact inside the workspace
   - tool: edit
@@ -52,6 +52,17 @@ rules:
     match: '\b(docker\s+(run|exec|cp|create|start|restart|stop|kill|attach|commit|build|buildx|load|import|export|save|login|logout|compose|context|update|pause|unpause|rename|system\s+prune|container\s+(run|exec|cp|create|start|restart|stop|kill|rm|attach|commit|export|update|pause|unpause|rename|prune)|image\s+(rm|prune|push|load|import|build)|plugin\s+(install|rm|remove|enable|disable|upgrade|set)|(service|stack|node|swarm|network|volume|secret|config)\s+(update|deploy|rm|remove|create|leave|join|scale|prune|promote|demote|init|connect|disconnect))|systemctl\s+(start|stop|restart|enable|disable|daemon-reload|reset-failed)|podman\s+(run|exec|cp|create|start|restart|rm|stop|kill|attach|commit|build|load|import|export|save|login|secret\s+create|system\s+(reset|prune))|install\.sh|import-secrets\.sh|rm\s+-rf|mkfs|dd\s+if=)'
     decision: deny
     reason: mutating operation reserved for the operator runbook
+  # systemd image, machine, extension, and network tools: listing and showing
+  # are fine; pulling, attaching, merging, starting, mounting, and editing are
+  # runbook steps for the operator.
+  - tool: bash
+    match: '\b(importctl|machinectl|portablectl|systemd-sysext|systemd-confext|systemd-mstack|systemd-vmspawn|systemd-nspawn|systemd-dissect|networkctl)\s+(-[A-Za-z-]+\s+)*(pull-[a-z]+|import-[a-z]+|export-[a-z]+|attach|reattach|detach|merge|unmerge|refresh|start|stop|poweroff|reboot|terminate|kill|remove|clone|rename|read-only|set-limit|clean|mount|umount|edit|reload|reconfigure|renew|forcerenew|up|down|delete|--mount|--umount|--discard|--copy-to|--copy-from|--make-archive|--boot|--with)\b'
+    decision: deny
+    reason: image, machine, extension, or network mutation reserved for the operator runbook
+  - tool: bash
+    match: '^\s*(importctl|machinectl|portablectl|systemd-sysext|systemd-confext|networkctl|systemd-dissect)\s+(-[A-Za-z-]+\s+)*(list|list-images|list-transfers|status|show|inspect|is-attached|cat-config|--discover|--json|-l\b|-J\b)\b'
+    decision: allow
+    reason: read-only systemd tool query
   # Read-only swarm inspection is always fine.
   - tool: bash
     match: '^\s*docker\s+(info|version|(node|service|stack|network|volume|secret|config|plugin)\s+(ls|inspect|ps))\b'

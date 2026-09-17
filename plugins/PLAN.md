@@ -2,18 +2,20 @@
 
 # systemd-dev-plugins: moving container estates onto systemd primitives
 
-This document plans the second generation of the migration tooling that lives
-under `plugins/`. The first generation, `swarm-to-systemd`, captures a Docker
-Swarm estate and renders Podman Quadlet units. The second generation keeps that
-capture as one source among several and adds every deployment form systemd
-itself offers as a target: plain units of every type, nspawn containers, mount
-stacks, vmspawn virtual machines, portable services, system and configuration
-extensions, capsules, and networkd-managed networking. It also moves the work
-into the systemd tree's own conventions, so that the rendered output, the
-fixtures, and the verification all use files, templates, and tests that the
-tree already ships.
+This document plans and records the migration tooling that lives under
+`plugins/`: one plugin, `systemd-migration`, organized around systemd's own
+components rather than around the technology being migrated. Docker Swarm and
+Podman are adapters that discover an estate into a common inventory; a planner
+turns the inventory and the target hosts' capabilities into a plan the user
+reviews; and one skill per systemd component (services, machines, networkd,
+resolved, resource control, credentials, journald, storage, extensions,
+portable services) renders its part of the result, composed at render time.
+The multi-node Docker Swarm is the first and primary use case because it
+exercises nearly every component. The work follows the systemd tree's own
+conventions, so the rendered output, the fixtures, and the verification use
+files, templates, and tests the tree already ships.
 
-Everything below was checked against this checkout (systemd 261 development
+Everything below was checked against this checkout (systemd 262 development
 tree). Where a capability depends on a version, the version is named.
 
 ## 1. What the tree already provides
@@ -142,69 +144,101 @@ network files.
 
 ## 2. Naming and layout
 
-### 2.1 Marketplace and plugins
+### 2.1 One plugin, organized around systemd
 
-Claude Code plugin and marketplace names must be kebab-case; a colon is not
-allowed, and the install form is `plugin@marketplace`. The requested
-`systemd-dev-plugins:[source]-[object]-to-[target]` therefore becomes:
+Claude Code plugin and marketplace names must be kebab-case, and plugins are
+copied into separate caches on install, so two plugins cannot share a file.
+The first generation worked around that by vendoring the contract into four
+source-named plugins. The second generation is one plugin, `systemd-migration`,
+in the `systemd-dev-plugins` marketplace, organized around systemd rather than
+around the technology being migrated. Docker and Podman are adapters that
+discover an estate into a common inventory; the work of expressing the estate
+on systemd is split into one skill per systemd component so the pieces
+compose, and the Quadlet renderer stays in full as the Podman adapter target.
 
-- marketplace `systemd-dev-plugins`, declared in `.claude-plugin/marketplace.json`
-  at the repository root (replacing `danielbodnar-systemd`);
-- plugins named `<source>-<object>-to-<target>` under `plugins/`;
-- skills addressed as `plugin:skill`, for example
-  `docker-swarm-to-systemd:capture`.
+```
+plugins/systemd-migration/
+  contract/            inventory schema and types, the directive catalogue and the
+                       surface generated from man/, the unit builder, placement, the
+                       component interface, the compose engine, the plan model, the
+                       registry, the coverage manifest
+  scripts/             the drivers: plan.ts, review.ts, render.ts
+  skills/
+    discover-docker-swarm/    adapter: capture.sh, normalize.ts
+    discover-podman/          adapter: capture.sh, normalize.ts (scaffold)
+    discover-systemd-hosts/   probe.sh: what each target host's systemd can do
+    migration-planner/        plan.yaml, the translation map, MIGRATION-PLAN.md
+    systemd-service/          scripts/component.ts plus the one-call render.ts
+    systemd-machined/         images (mstack, DDI), machines (.nspawn), VMs
+    systemd-networkd/         bridges, overlays, published ports, sockets
+    systemd-resolved/         hosts file, DNS-SD, site DNS
+    systemd-resource-control/ slices and limits
+    systemd-creds/            credentials and the import script
+    systemd-journald/         log fields, identifiers, namespaces
+    systemd-storage/          mounts, tmpfiles, binds, tmpfs, data moves
+    systemd-sysext/           config files as confexts
+    systemd-portable/         portable services and capsules
+    podman-quadlet/           the Podman adapter target
+    systemd-verify/           dry-run and live verification
+  agents/, commands/   discovery-auditor, migration-planner, unit-author,
+                       quadlet-author, cutover-verifier; /migrate-discover,
+                       /migrate-plan, /migrate-render, /migrate-render-quadlet,
+                       /migrate-verify
+  harness/             the Managed Agents harness
+```
 
-Skills must be direct children of a plugin's `skills/` directory, and plugins
-are copied into a cache on install, so two plugins cannot share a file after
-installation. That rules out one shared schema directory and argues against a
-large number of very small plugins. The layout below groups by target family,
-which keeps each plugin installable on its own and keeps the shared contract
-small enough to vendor.
+### 2.2 The component interface
 
-| Plugin | Purpose | Skills (each `SKILL.md` is named `<source>-<object>-to-<target>`) |
-|---|---|---|
-| `docker-swarm-to-systemd` | Source side. Capture and normalise a Swarm, Compose project, or single host into the inventory contract; plan the translation. | `docker-swarm-to-inventory`, `docker-compose-to-inventory`, `docker-container-to-inventory`, `docker-to-systemd-planner`, `docker-to-systemd-cutover` |
-| `oci-image-to-systemd` | Images. Pull or convert an image into a mount stack, DDI, or directory, and run it as a native service. | `oci-image-to-mstack`, `oci-image-to-ddi`, `docker-image-to-service` (`RootMStack=` or `RootImage=` units) |
-| `docker-container-to-nspawn` | Containers as machines. | `docker-container-to-nspawn`, `docker-container-to-oci-bundle`, `docker-stack-to-machines` (targets, slices, machined registration) |
-| `docker-container-to-vmspawn` | Containers as virtual machines. | `docker-container-to-vmspawn`, `docker-image-to-bootable-ddi` |
-| `docker-service-to-portable` | Services as portable images and capsules. | `docker-service-to-portable`, `docker-service-to-capsule`, `docker-stack-to-portable-profile` |
-| `docker-image-to-sysext` | Images and configs as extensions. | `docker-image-to-sysext`, `docker-config-to-confext`, `docker-secret-to-credential` |
-| `docker-network-to-networkd` | Networks. | `docker-network-to-networkd`, `docker-overlay-to-vxlan`, `docker-macvlan-to-netdev`, `docker-port-to-socket`, `docker-dns-to-resolved` |
-| `docker-volume-to-systemd` | Storage. | `docker-volume-to-mount`, `docker-bind-to-tmpfiles`, `docker-volume-to-repart` |
-| `podman-container-to-quadlet` | The existing Quadlet renderer, kept as the Podman target. | `podman-container-to-quadlet`, `podman-network-to-quadlet`, `podman-volume-to-quadlet` |
-| `systemd-migration-harness` | The Managed Agents harness and the verification skill that runs the tree's tests. | `systemd-migration-verify`, `systemd-migration-worker` |
+A component (`contract/component.ts`) names the man pages it implements,
+declares what a host must provide, raises the decisions it needs, and
+contributes files and unit directives to a host's tree through a shared render
+context. The compose engine (`contract/compose.ts`) runs every registered
+component's `decide()` to draft `plan.yaml`, and every component's `render()`
+per host in dependency order, so the creds, resource-control, storage,
+networkd, and journald components each add their lines to the unit the service
+component created; a `finish()` phase lets the service component write the
+stack targets after everything registered its units. The engine owns
+placement and the form each service takes (plain service, machine, virtual
+machine, portable service, Quadlet container); components claim the forms they
+render.
 
-Ten plugins and about thirty skills. Each skill carries the trigger phrases in
-its `description`, since that field drives automatic invocation.
+### 2.3 plan.yaml
 
-### 2.2 Shared contract
+`contract/plan.ts` and `plan-schema.json` define the user's approval surface.
+Each decision carries its component, subject, question, options with
+consequences and host requirements, evidence from the inventory, a default
+where one is defensible, and the chosen value with the user's reason. Address
+ranges, overlay transports, published-port policies, name resolution, data
+moves, the form each service takes, where each secret lives, how images mount
+on each host, journal namespaces, and config packaging are all decisions.
+The ones that must not be guessed have no default. `render.ts` refuses an
+unresolved plan and, without `--accept-defaults`, an unapproved one. A re-run
+keeps earlier choices where they still apply. Nothing about an estate is a
+constant in component code.
 
-The inventory schema (`inventory-schema.json`), its TypeScript types, and the
-translation map are needed by every plugin. They live once, under
-`plugins/docker-swarm-to-systemd/references/`, and are vendored into the other
-plugins by a `just sync-contract` recipe that copies the files and writes a
-checksum header. A test in the harness fails when any vendored copy drifts.
-
-### 2.3 Where rendered output goes
+### 2.4 Where rendered output goes
 
 The renderer writes a tree per host that mirrors the installed layout, so
-`install.sh` is a `cp -a` plus `daemon-reload`:
+`install.sh` is a `cp -a` plus the components' install steps and a
+`daemon-reload`:
 
 ```
 hosts/<host>/
-  etc/systemd/system/            stack targets, services, sockets, timers, mounts, slices, drop-ins
-  etc/systemd/network/           .netdev, .network, .link for zone bridges, vxlan, wireguard, macvlan
+  etc/systemd/system/            services, targets, slices, timers, sockets, mounts, drop-ins
   etc/systemd/nspawn/            NAME.nspawn per machine
+  etc/systemd/network/           .netdev and .network files for zone bridges, vxlan, wireguard, macvlan
   etc/systemd/dnssd/             advertised services
-  etc/systemd/resolved.conf.d/   per-estate resolver settings
-  etc/sysusers.d/ etc/tmpfiles.d/ etc/repart.d/ etc/sysctl.d/
-  etc/credstore.encrypted/       encrypted credentials (values never rendered; import script only)
-  etc/<stack>/                   environment files and non-secret config files
-  var/lib/machines/              NAME.mstack symlinks or NAME/ directories, NAME.raw.v/ for versioned images
-  var/lib/portables/ var/lib/extensions/ var/lib/confexts/ var/lib/capsules/
+  etc/systemd/resolved.conf.d/   resolver settings the discovery decision needs
+  etc/hosts.d/                   the hosts fragment when discovery is hosts-file based
+  etc/tmpfiles.d/ etc/sysctl.d/  local volumes, host tunables
+  etc/<stack>/                   environment files and config files
+  var/lib/confexts/              config files packed as a confext when decided
+  secrets/import-credentials.sh  systemd-creds encrypt from operator-supplied files; values never rendered
   expected.json                  what the verifier checks on this host
-MIGRATION-NOTES.md               every decision the renderer declined to make
-TRANSLATION-MAP.md               the planner's map for this estate
+  install.sh
+images.json                      local name -> reference, digest, hosts; input to pull-images.sh
+expected.json                    every host
+MIGRATION-NOTES.md               decisions taken without review, translations to review, capture warnings
 ```
 
 ## 3. The translation map
@@ -345,99 +379,65 @@ can render into the workspace but never into the live directories.
 
 ## 7. Phases
 
-Each phase ends with the tree building, `bun test` green, and the new subtests
-passing under `mkosi -f box -- meson test -C build --setup=integration`.
+Each phase ends with the harness suite green, the fixture drift checks clean,
+and the integration subtests passing under
+`mkosi -f box -- meson test -C build --setup=integration`.
 
-1. **Restructure.** Rename the marketplace, split the existing plugin into
-   `docker-swarm-to-systemd` and `podman-container-to-quadlet`, add the
-   contract sync, keep the current tests green. Nothing new is rendered yet.
-2. **Planner and catalogue.** `catalog.ts` over `man/`, the translation map
-   skill, `translation-map.json`, and the `docs/` page. The fixture estate under
-   `test/test-container-migration/`.
-3. **Images and native services.** `oci-image-to-systemd`: pull-oci wrapper,
-   mount stack layout, `RootMStack=` services, `.v/` versioning, credentials.
-   `TEST-95` with `.inventory.sh`, `.mstack.sh`, `.verify.sh`.
-4. **Machines.** `docker-container-to-nspawn`: `.nspawn` rendering, OCI
-   bundles, machines targets and slices. `.nspawn.sh`.
-5. **Networking.** `docker-network-to-networkd`: zone bridges with IPAM,
-   static leases, vxlan over wireguard, macvlan, sockets and port policy,
-   resolved and DNS-SD. The two `80-container-*` files and the
-   `25-container-*` fixtures. `.networkd.sh`, `.dnssd.sh`.
-6. **Storage, configs, extensions.** `docker-volume-to-systemd` and
-   `docker-image-to-sysext`: mounts, tmpfiles, repart, confext, sysext.
-   `.sysext.sh`.
-7. **Portable, capsule, vmspawn.** `docker-service-to-portable` and
-   `docker-container-to-vmspawn`. `.portable.sh`, `.capsule.sh`, `.vmspawn.sh`.
-8. **Harness.** Roles, policy, worker unit, and the verifier's host subset.
+1. **Restructure.** One plugin organized by systemd component, one contract,
+   adapters for the sources, commands renamed. Done.
+2. **Composition layer.** The component interface, the compose engine,
+   `plan.yaml` with guided review, the drivers, the first ten components, the
+   one-call renderer re-implemented over the engine. Done.
+3. **Host discovery.** `discover-systemd-hosts/probe.sh`, its harness test,
+   the `.probe.sh` subtest. Done.
+4. **Surface coverage.** `contract/surface.json` generated from `man/`,
+   `contract/coverage.json`, the coverage test. Done.
+5. **Networking.** Zone bridges with the decided ranges and static leases,
+   VXLAN and WireGuard transports, macvlan, published ports as sockets,
+   discovery; the `.networkd.sh` subtest.
+6. **Machines.** The machine form with binds, credentials, capabilities,
+   and limits; the VM form; `rendered/machine` as a second fixture tree from
+   a committed plan; the `.nspawn.sh` subtest.
+7. **Adapters.** The Quadlet renderer as a component selectable per service;
+   the Podman discovery scaffold.
+8. **Documentation and harness.** Agents, commands, tasks, approvals, the
+   docs page, this plan. Done alongside the phases above.
+9. **Remaining subtests.** `.dnssd.sh`, `.portable.sh`, `.sysext.sh`,
+   `.capsule.sh`, `.vmspawn.sh` from the table in section 5, each behind the
+   component that renders its input.
 
-Phases 3 to 7 are independent of each other once phase 2 exists, so they can
-proceed in parallel branches that each carry their own subtest.
+## 8. Decisions taken
 
-## 8. Decisions still open
+The questions section 8 used to leave open were answered on the pull request
+and are recorded here so the plan reads as one document.
 
-These change the shape of the work and are recorded here so the answer can be
-applied when it arrives.
-
-1. Plugin granularity: the ten-plugin layout above, one plugin per pair (about
-   thirty plugins with heavy duplication), or a single plugin with thirty
-   skills. The plan assumes the ten-plugin layout.
-2. Whether the networkd verification may add a test case class to
-   `test/test-network/systemd-networkd-tests.py`, which is Python, or must stay
-   in the shell subtest that copies the same fixtures. The plan assumes shell
-   only, with the fixtures placed where the Python suite could pick them up.
-3. Whether the tree additions in section 4 are meant to reach upstream
-   systemd eventually, which decides how conservative the `network/` and
-   `docs/` changes should be. The plan assumes they are written to upstream
-   standards but land in this fork first.
-4. Whether pull request 1 merges as it stands before the restructure begins
-   in a new pull request per phase, or the branch keeps growing. The plan
-   assumes a merge first, since the restructure renames what that pull request
-   adds.
-5. The minimum systemd and kernel versions on the target hosts. The plan
-   assumes systemd 261 and a kernel of 6.13 or later, which the mount stack
-   features require; older hosts fall back to `RootImage=` with DDIs built by
-   `systemd-repart`.
+1. **Granularity.** One plugin, grouped by role; not one plugin per systemd
+   component. Skills are organized per component inside it.
+2. **Python.** The networkd verification may add a test class to
+   `test/test-network/systemd-networkd-tests.py` if it needs the Python
+   suite; the shell subtest is the first choice.
+3. **Upstream.** Tree additions are written to upstream standards and land in
+   this fork first.
+4. **Branching.** The restructure is a second pull request into the first
+   one's branch, with normal commits and no history rewriting.
+5. **Scope.** Every systemd component is in scope, with the multi-node Docker
+   Swarm as the MVP and Podman as the next adapter; Quadlet is the Podman
+   adapter's target, not a systemd component. Coverage is measured against
+   the tree's man pages rather than asserted.
+6. **Floors.** systemd 261 and kernel 6.13 on target hosts for mount stacks;
+   older hosts fall back to disk images, decided per host from the probe.
 
 ## 9. Status
 
-Phase 3 is complete on the same branch: the `oci-image-to-systemd` plugin
-holds `oci-image-to-mstack` (`pull-images.sh` over the renderer's
-`images.json`), `oci-image-to-ddi` (`make-ddi.sh` with a `repart.d`
-definition for hosts without mount stacks), and `docker-image-to-service`
-(`render.ts`: per-host services with `RootMStack=`, stack targets and slices,
-health timers, encrypted credentials, mount units, tmpfiles, sysctl fragments,
-config files, and install scripts). The capture records image configuration
-and the inventory carries it as `images[]`, since `pull-oci` drops it. The
-placement logic and the unit-file builder moved into the contract and the
-Quadlet renderer uses them too. `test/test-container-migration/` gains the
-committed `inventory.json` and `rendered/native/` tree (regenerated by
-`plugins/scripts/render-fixtures.sh`, drift-checked by the harness suite) and
-`TEST-95-CONTAINER-MIGRATION` runs `.inventory.sh`, `.mstack.sh`, and
-`.verify.sh` against them. Work paused here for review, as asked; phase 5 may
-add a test class to the Python networkd suite.
+The restructure branch (`claude/systemd-migration-restructure`, pull request 5
+into pull request 1's branch) carries phases 1 to 4 complete and phases 5 to 7
+in progress. The harness suite covers the contract, the adapters, the
+composition engine, every component's decisions and rendering, the probe, and
+the surface coverage; `plugins/scripts/render-fixtures.sh --check` guards the
+committed fixture trees; `TEST-95-CONTAINER-MIGRATION` runs `.inventory.sh`,
+`.mstack.sh`, `.verify.sh`, and `.probe.sh` on a booted image.
 
-Phase 2 is complete on the same branch: `build-catalog.ts` generates
-`contract/directives.json` from `man/` (34 pages, about 2200 directives, line
-types, options, and verbs with the version each was added in), `contract/catalog.ts`
-checks unit-style files against it and the tree's own `units/` and `network/`
-pass, `references/translation-map.json` holds the static map with every
-directive validated against the catalogue, `plan-map.ts` selects the rows an
-estate needs and writes `TRANSLATION-MAP.md`, the fixture estate lives under
-`test/test-container-migration/` (registered in `test/meson.build`), and
-`docs/MIGRATING_CONTAINERS_TO_SYSTEMD.md` carries the map in prose. This
-checkout is 262~rc3, so the catalogue records that version; the stated floor
-of 261 stands for target hosts.
-
-Phase 1 is complete on the `claude/swarm-to-systemd-agent-gcqvex` branch: the
-marketplace is `systemd-dev-plugins`, the first-generation plugin is split into
-`docker-swarm-to-systemd`, `podman-container-to-quadlet`, and
-`systemd-migration-harness`, the inventory contract lives under
-`docker-swarm-to-systemd/contract/` and is vendored by
-`plugins/scripts/sync-contract.sh` with a drift test in the harness suite, and
-the existing tests pass. The open decisions in section 8 were resolved as the
-plan assumed, pending any correction: the ten-plugin layout, shell-only
-verification, upstream-standard tree changes landing in this fork, and systemd
-261 with kernel 6.13 as the target floor. Decision 4 went the other way: the
-restructure continues on the same branch and pull request rather than waiting
-for a merge, so that the renames and the first-generation code are reviewed
-together.
+The first pull request (`claude/swarm-to-systemd-agent-gcqvex`) carries the
+first generation: the four source-named plugins, the directive catalogue, the
+translation map, the fixture estate, the native service renderer, and the
+harness. Everything there is kept; this branch reorganizes and extends it.
