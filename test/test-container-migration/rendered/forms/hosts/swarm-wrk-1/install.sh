@@ -21,12 +21,16 @@ while read -r path uid gid mode; do
     chmod "$mode" "/$path"
 done <<'MANIFEST'
 MANIFEST
+install -D -m 0755 "$here/usr/local/lib/systemd-migration/stackctl" '/usr/local/lib/systemd-migration/stackctl'
+install -d -m 0755 '/var/lib/systemd-migration/rollout'
+install -D -m 0700 "$here/secrets/import-credentials.sh" '/usr/local/lib/systemd-migration/import-credentials.sh'
 systemctl daemon-reload
 systemctl try-restart systemd-resolved.service
 systemd-confext refresh
+systemctl enable 'data.target' 'web.target'
 systemd-analyze verify '/etc/systemd/system/data_exporter.service' '/etc/systemd/system/data_postgres-health.service' '/etc/systemd/system/data_postgres-restart.service' '/etc/systemd/system/data_postgres.service' '/etc/systemd/system/web_app-health.service' '/etc/systemd/system/web_app-restart.service' '/etc/systemd/system/web_app.service' '/etc/systemd/system/data_postgres-health.timer' '/etc/systemd/system/web_app-health.timer' '/etc/systemd/system/var-lib-data-data_backups.mount' '/etc/systemd/system/data.target' '/etc/systemd/system/web.target' '/etc/systemd/system/stack-data.slice' '/etc/systemd/system/stack-web.slice'
 if [ "${1:-}" = "--start" ]; then
     systemctl enable --now 'data.target' 'web.target'
 else
-    echo "installed; start with: systemctl enable --now data.target web.target"
+    echo "installed; start with: systemctl enable --now 'data.target' 'web.target'"
 fi

@@ -12,7 +12,7 @@ inventory:
   networks: 4
   nodes: 2
 summary: 
-  decisions: 54
+  decisions: 62
   unresolved: 0
   defaulted: 0
 hosts: 
@@ -31,7 +31,7 @@ decisions:
         consequence: replicas beyond the eligible hosts are dropped and noted; capacity comes from more hosts
       - value: "yes"
         label: scale out on a host
-        consequence: "numbered units (name-1, name-2) with offset published ports on one host"
+        consequence: "numbered units (name-1, name-2) with offset published ports on one host, never more per host than the source's max_replicas_per_node"
     default: "no"
     chosen: "no"
     reason: "accepted the planner's default"
@@ -77,7 +77,7 @@ decisions:
       - "services[web_app].mode"
       - "services[web_app].placement"
       - "services[web_app].tasks[node=swarm-wrk-1]"
-      - "web_app: wanted 2 replicas but rendered 1 (one per eligible host; pass --scale-out for numbered instances)"
+      - "web_app: wanted 2 replicas but rendered 1; max_replicas_per_node 1 over 1 eligible host(s) places at most 1, add hosts for the rest"
     default: swarm-wrk-1
     chosen: swarm-wrk-1
     reason: "accepted the planner's default"
@@ -616,18 +616,133 @@ decisions:
         requires: 
           daemons: 
             - networkd
+          systemd: 243
       - value: vxlan
         label: VXLAN over the underlay
         consequence: "plain VXLAN between the hosts' addresses; unencrypted"
         requires: 
           daemons: 
             - networkd
+          systemd: 243
+      - value: geneve
+        label: GENEVE over the underlay
+        consequence: "one geneve device per peer, each enslaved into the zone bridge; the same L2 domain as VXLAN with a header that carries options; unencrypted"
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 234
+      - value: gretap
+        label: GRE tap (L2 GRE over IPv4)
+        consequence: "one gretap device per peer enslaved into the zone bridge; frames are carried in GRE with the decided key, unencrypted, and the site's network must pass IP protocol 47"
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 231
+      - value: ip6gretap
+        label: GRE tap over IPv6
+        consequence: the same L2 GRE with IPv6 endpoints; every host needs an IPv6 address the others reach it at
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 231
+      - value: erspan
+        label: ERSPAN (mirrored frames in GRE)
+        consequence: "one erspan device per peer enslaved into the zone bridge; ERSPAN encapsulates mirrored traffic, so it suits a monitoring zone and not a zone whose machines answer"
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 252
+      - value: l2tp
+        label: L2TPv3 pseudowire
+        consequence: "one l2tp tunnel per peer with a session interface enslaved into the zone bridge; L2 over UDP, unencrypted, and the decided UDP port must be open between the hosts"
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 245
+      - value: macsec
+        label: MACsec on a shared segment
+        consequence: "the hosts already share one L2 segment; a macsec device on the decided parent link encrypts it and is enslaved into the zone bridge, with the key as a credential"
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 243
+      - value: gre
+        label: GRE (L3 GRE over IPv4)
+        consequence: "one gre device per peer, each host's slice routed over it; no L2 between hosts, so aliases resolve per host; unencrypted"
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 231
+      - value: ip6gre
+        label: GRE over IPv6
+        consequence: the same routed GRE with IPv6 endpoints; every host needs an IPv6 address the others reach it at
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 231
+      - value: ipip
+        label: IPIP (IPv4 in IPv4)
+        consequence: "one ipip device per peer, each host's slice routed over it; the smallest header of the routed kinds and unencrypted"
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 215
+      - value: sit
+        label: SIT (IPv6 in IPv4)
+        consequence: "one sit device per peer; SIT carries IPv6 only, so it serves an estate whose ranges are IPv6 and not the IPv4 slices this plan derives"
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 215
+      - value: ip6tnl
+        label: IP6TNL (IPv4 or IPv6 in IPv6)
+        consequence: "one ip6tnl device per peer with Mode=any, each host's slice routed over it; every host needs an IPv6 address the others reach it at"
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 219
+      - value: vti
+        label: "VTI (IPsec, IPv4)"
+        consequence: "one vti device per peer carrying the decided key as the IPsec mark; the security associations themselves are not systemd's to configure"
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 231
+      - value: vti6
+        label: VTI over IPv6 (IPsec)
+        consequence: the same IPsec-marked tunnel with IPv6 endpoints; every host needs an IPv6 address the others reach it at
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 231
+      - value: xfrm
+        label: XFRM interface (IPsec)
+        consequence: "one xfrm device carrying the decided interface id, with every peer's slice routed over it; one device for all peers, and the security associations are configured out of band"
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 243
+      - value: bareudp
+        label: Bare UDP tunnel
+        consequence: one bareudp device carrying the decided L3 protocol in UDP on the decided port; a generic L3 encapsulation with the smallest possible configuration
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 247
+      - value: fou
+        label: IPIP inside Foo-over-UDP
+        consequence: "a fou receive port on the decided UDP port and one ipip device per peer encapsulated in it, each host's slice routed over them; UDP traverses middleboxes that drop protocol 4"
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 240
       - value: wireguard
         label: "WireGuard only, routed"
         consequence: "each host's zone bridge subnet is routed over WireGuard; no L2 between hosts, aliases resolve per host"
         requires: 
           daemons: 
             - networkd
+          systemd: 237
       - value: underlay
         label: route over the existing network
         consequence: "no overlay; each host's bridge subnet must be reachable through the site's routers"
@@ -646,7 +761,7 @@ decisions:
     subject: 
       kind: network
       name: web_frontend
-    question: Which VXLAN network identifier (VNI) does web_frontend use when its transport is VXLAN? The default is its position among the application networks sorted by name.
+    question: Which network identifier (VNI) does web_frontend use when its transport is VXLAN or GENEVE? The default is its position among the application networks sorted by name.
     format: port
     evidence: 
       - "networks[web_frontend] is application network 3 of 3 (sorted by name)"
@@ -808,12 +923,33 @@ decisions:
     options: 
       - value: host
         label: on each host that runs it
-        consequence: "the service binds the port on its host; SocketBindAllow= restricts it to that port; clients use the host's address"
+        consequence: "the service binds the port on its host; SocketBindAllow= restricts it to that port; clients use the host's address; it cannot honour an every-host ingress"
       - value: socket
         label: socket activation
-        consequence: a .socket unit owns the port and passes it in; the process must accept an inherited socket
+        consequence: a .socket unit owns the port and passes it in; the process must accept an inherited socket; it cannot honour an every-host ingress
         requires: 
           systemd: 250
+      - value: reuseport
+        label: socket activation with ReusePort=
+        consequence: "one .socket per instance on this host with ReusePort=yes, so the kernel spreads connections over the instances that share the host; the process must accept an inherited socket, and it cannot honour an every-host ingress"
+        requires: 
+          systemd: 250
+      - value: socket-proxyd
+        label: systemd-socket-proxyd per backend
+        consequence: "one .socket with ReusePort=yes per backend, each activating a systemd-socket-proxyd instance forwarding to that backend; spreads over every instance of the estate, local or remote, and honours the ingress scope"
+        requires: 
+          systemd: 250
+      - value: multipath
+        label: a virtual address with multipath routes
+        consequence: "the service gets an address of its own on a dummy netdev and the hosts that run no instance route it over the backends; layer 3, per flow, not health aware, and honours the ingress scope"
+        requires: 
+          systemd: 245
+      - value: haproxy
+        label: HAProxy
+        consequence: the haproxy-ingress component renders a hardened haproxy unit with one backend per instance and health checks from the source healthcheck; honours the ingress scope and needs the haproxy binary on the host
+        requires: 
+          tools: 
+            - haproxy
       - value: external-lb
         label: behind an external load balancer
         consequence: "same as host, and the plan lists the hosts as backends for the balancer you operate"
@@ -822,8 +958,30 @@ decisions:
         consequence: "same as host, plus one resolved/dnssd record per host announcing the port"
     evidence: 
       - "services[web_app].ports[8080] mode=ingress published=8080"
+      - "services[web_app].endpoint_mode=vip"
+      - "services[web_app].mode=replicated replicas=2"
     default: null
     chosen: host
+  - id: networkd.ingress.web_app.8080-tcp
+    component: networkd
+    kind: choice
+    subject: 
+      kind: port
+      name: web_app:8080/tcp
+    question: "Where does port 8080/tcp of web_app exist: only where the service runs, or on every host of the plan?"
+    options: 
+      - value: placement-hosts
+        label: the hosts that run it
+        consequence: the port is bound where an instance lands; clients have to know which hosts those are
+      - value: every-host
+        label: every host of the plan
+        consequence: "the routing mesh of the source: every host accepts the port and forwards to an instance; only socket-proxyd, multipath, and haproxy can honour it"
+    evidence: 
+      - "services[web_app].ports[8080] mode=ingress"
+      - the source accepted this port on every node through the routing mesh
+    default: placement-hosts
+    chosen: placement-hosts
+    reason: "accepted the planner's default"
   - id: networkd.publish.web_proxy.80-tcp
     component: networkd
     kind: choice
@@ -834,12 +992,33 @@ decisions:
     options: 
       - value: host
         label: on each host that runs it
-        consequence: "the service binds the port on its host; SocketBindAllow= restricts it to that port; clients use the host's address"
+        consequence: "the service binds the port on its host; SocketBindAllow= restricts it to that port; clients use the host's address; it cannot honour an every-host ingress"
       - value: socket
         label: socket activation
-        consequence: a .socket unit owns the port and passes it in; the process must accept an inherited socket
+        consequence: a .socket unit owns the port and passes it in; the process must accept an inherited socket; it cannot honour an every-host ingress
         requires: 
           systemd: 250
+      - value: reuseport
+        label: socket activation with ReusePort=
+        consequence: "one .socket per instance on this host with ReusePort=yes, so the kernel spreads connections over the instances that share the host; the process must accept an inherited socket, and it cannot honour an every-host ingress"
+        requires: 
+          systemd: 250
+      - value: socket-proxyd
+        label: systemd-socket-proxyd per backend
+        consequence: "one .socket with ReusePort=yes per backend, each activating a systemd-socket-proxyd instance forwarding to that backend; spreads over every instance of the estate, local or remote, and honours the ingress scope"
+        requires: 
+          systemd: 250
+      - value: multipath
+        label: a virtual address with multipath routes
+        consequence: "the service gets an address of its own on a dummy netdev and the hosts that run no instance route it over the backends; layer 3, per flow, not health aware, and honours the ingress scope"
+        requires: 
+          systemd: 245
+      - value: haproxy
+        label: HAProxy
+        consequence: the haproxy-ingress component renders a hardened haproxy unit with one backend per instance and health checks from the source healthcheck; honours the ingress scope and needs the haproxy binary on the host
+        requires: 
+          tools: 
+            - haproxy
       - value: external-lb
         label: behind an external load balancer
         consequence: "same as host, and the plan lists the hosts as backends for the balancer you operate"
@@ -848,8 +1027,30 @@ decisions:
         consequence: "same as host, plus one resolved/dnssd record per host announcing the port"
     evidence: 
       - "services[web_proxy].ports[80] mode=host published=80"
+      - "services[web_proxy].endpoint_mode=vip"
+      - "services[web_proxy].mode=global"
     default: host
     chosen: host
+    reason: "accepted the planner's default"
+  - id: networkd.ingress.web_proxy.80-tcp
+    component: networkd
+    kind: choice
+    subject: 
+      kind: port
+      name: web_proxy:80/tcp
+    question: "Where does port 80/tcp of web_proxy exist: only where the service runs, or on every host of the plan?"
+    options: 
+      - value: placement-hosts
+        label: the hosts that run it
+        consequence: the port is bound where an instance lands; clients have to know which hosts those are
+      - value: every-host
+        label: every host of the plan
+        consequence: "the routing mesh of the source: every host accepts the port and forwards to an instance; only socket-proxyd, multipath, and haproxy can honour it"
+    evidence: 
+      - "services[web_proxy].ports[80] mode=host"
+      - the source bound this port only on the nodes that ran the task
+    default: placement-hosts
+    chosen: placement-hosts
     reason: "accepted the planner's default"
   - id: networkd.publish.data_exporter.9187-tcp
     component: networkd
@@ -861,12 +1062,33 @@ decisions:
     options: 
       - value: host
         label: on each host that runs it
-        consequence: "the service binds the port on its host; SocketBindAllow= restricts it to that port; clients use the host's address"
+        consequence: "the service binds the port on its host; SocketBindAllow= restricts it to that port; clients use the host's address; it cannot honour an every-host ingress"
       - value: socket
         label: socket activation
-        consequence: a .socket unit owns the port and passes it in; the process must accept an inherited socket
+        consequence: a .socket unit owns the port and passes it in; the process must accept an inherited socket; it cannot honour an every-host ingress
         requires: 
           systemd: 250
+      - value: reuseport
+        label: socket activation with ReusePort=
+        consequence: "one .socket per instance on this host with ReusePort=yes, so the kernel spreads connections over the instances that share the host; the process must accept an inherited socket, and it cannot honour an every-host ingress"
+        requires: 
+          systemd: 250
+      - value: socket-proxyd
+        label: systemd-socket-proxyd per backend
+        consequence: "one .socket with ReusePort=yes per backend, each activating a systemd-socket-proxyd instance forwarding to that backend; spreads over every instance of the estate, local or remote, and honours the ingress scope"
+        requires: 
+          systemd: 250
+      - value: multipath
+        label: a virtual address with multipath routes
+        consequence: "the service gets an address of its own on a dummy netdev and the hosts that run no instance route it over the backends; layer 3, per flow, not health aware, and honours the ingress scope"
+        requires: 
+          systemd: 245
+      - value: haproxy
+        label: HAProxy
+        consequence: the haproxy-ingress component renders a hardened haproxy unit with one backend per instance and health checks from the source healthcheck; honours the ingress scope and needs the haproxy binary on the host
+        requires: 
+          tools: 
+            - haproxy
       - value: external-lb
         label: behind an external load balancer
         consequence: "same as host, and the plan lists the hosts as backends for the balancer you operate"
@@ -875,8 +1097,30 @@ decisions:
         consequence: "same as host, plus one resolved/dnssd record per host announcing the port"
     evidence: 
       - "services[data_exporter].ports[9187] mode=host published=9187"
+      - "services[data_exporter].endpoint_mode=vip"
+      - "services[data_exporter].mode=replicated replicas=1"
     default: host
     chosen: host
+    reason: "accepted the planner's default"
+  - id: networkd.ingress.data_exporter.9187-tcp
+    component: networkd
+    kind: choice
+    subject: 
+      kind: port
+      name: data_exporter:9187/tcp
+    question: "Where does port 9187/tcp of data_exporter exist: only where the service runs, or on every host of the plan?"
+    options: 
+      - value: placement-hosts
+        label: the hosts that run it
+        consequence: the port is bound where an instance lands; clients have to know which hosts those are
+      - value: every-host
+        label: every host of the plan
+        consequence: "the routing mesh of the source: every host accepts the port and forwards to an instance; only socket-proxyd, multipath, and haproxy can honour it"
+    evidence: 
+      - "services[data_exporter].ports[9187] mode=host"
+      - the source bound this port only on the nodes that ran the task
+    default: placement-hosts
+    chosen: placement-hosts
     reason: "accepted the planner's default"
   - id: resolved.discovery.estate
     component: resolved
@@ -1110,7 +1354,7 @@ decisions:
         consequence: "<stack>.target and stack-<stack>.slice are files under /etc/systemd/system, installed by install.sh"
       - value: generator
         label: systemd-migration-generator
-        consequence: "install.sh writes /etc/systemd-migration/stacks.d/<stack>.conf and the generator emits the targets, slices, and Wants= into the early generator directory on every daemon-reload; edits to the description need no re-render"
+        consequence: "install.sh writes /etc/systemd-migration/stacks.d/<stack>.conf and installs the generator under /usr/lib/systemd/system-generators/; the manager emits the targets, slices, and Wants= into the generator directory on every boot and every daemon-reload, so an edit to the description needs no re-render"
     evidence: 
       - "stacks[data]"
       - "stacks[web]"
@@ -1130,10 +1374,112 @@ decisions:
         consequence: systemctl enable <stack>.target per stack in install.sh; nothing else is enabled
       - value: "yes"
         label: a preset file
-        consequence: /usr/lib/systemd/system-preset/80-systemd-migration.preset enables the stack targets and disables what the estate does not run; install.sh runs systemctl preset-all on the rendered units
+        consequence: "/usr/lib/systemd/system-preset/80-systemd-migration.preset enables every rendered unit with an [Install] section and disables what the estate runs no replica of; install.sh runs systemctl preset over those units, never preset-all"
     evidence: 
       - "stacks[data]"
       - "stacks[web]"
     default: "no"
     chosen: "no"
+    reason: "accepted the planner's default"
+  - id: rollout.order.data_postgres
+    component: rollout
+    kind: choice
+    subject: 
+      kind: service
+      name: data_postgres
+    question: In what order does a batch of data_postgres change over during a deploy?
+    options: 
+      - value: stop-first
+        label: "stop the batch, then start it"
+        consequence: "the batch's capacity is gone while it restarts; the only order a single instance can have"
+      - value: start-first
+        label: "keep the rest up, then restart the batch"
+        consequence: "the controller confirms the instances outside the batch are active before restarting it, so capacity never drops below the instance count minus the parallelism"
+    evidence: 
+      - "services[data_postgres].update_config.order=stop-first"
+      - "services[data_postgres].replicas=1"
+      - placement.hosts.data_postgres=swarm-wrk-1
+    default: stop-first
+    chosen: stop-first
+    reason: "accepted the planner's default"
+  - id: rollout.failure.data_postgres
+    component: rollout
+    kind: choice
+    subject: 
+      kind: service
+      name: data_postgres
+    question: What does the controller do when a batch of data_postgres is not active and healthy within the monitor window?
+    options: 
+      - value: pause
+        label: stop the deploy where it is
+        consequence: the remaining batches are left alone and the controller exits non-zero; the operator decides what follows
+      - value: continue
+        label: carry on with the next batch
+        consequence: every batch is changed over whatever the health results say; only for services where a failing instance costs nothing
+      - value: rollback
+        label: roll the service back
+        consequence: "the image target this deploy replaced is restored and the service's instances are restarted in the same batches before the controller exits non-zero"
+    evidence: 
+      - "services[data_postgres].update_config.failure_action=pause"
+      - "services[data_postgres].healthcheck.test"
+    default: pause
+    chosen: pause
+    reason: "accepted the planner's default"
+  - id: rollout.order.web_app
+    component: rollout
+    kind: choice
+    subject: 
+      kind: service
+      name: web_app
+    question: In what order does a batch of web_app change over during a deploy?
+    options: 
+      - value: stop-first
+        label: "stop the batch, then start it"
+        consequence: "the batch's capacity is gone while it restarts; the only order a single instance can have"
+      - value: start-first
+        label: "keep the rest up, then restart the batch"
+        consequence: "the controller confirms the instances outside the batch are active before restarting it, so capacity never drops below the instance count minus the parallelism"
+    evidence: 
+      - "services[web_app].update_config.order=start-first"
+      - "services[web_app].replicas=2"
+      - placement.hosts.web_app=swarm-wrk-1
+    default: start-first
+    chosen: start-first
+    reason: "accepted the planner's default"
+  - id: rollout.failure.web_app
+    component: rollout
+    kind: choice
+    subject: 
+      kind: service
+      name: web_app
+    question: What does the controller do when a batch of web_app is not active and healthy within the monitor window?
+    options: 
+      - value: pause
+        label: stop the deploy where it is
+        consequence: the remaining batches are left alone and the controller exits non-zero; the operator decides what follows
+      - value: continue
+        label: carry on with the next batch
+        consequence: every batch is changed over whatever the health results say; only for services where a failing instance costs nothing
+      - value: rollback
+        label: roll the service back
+        consequence: "the image target this deploy replaced is restored and the service's instances are restarted in the same batches before the controller exits non-zero"
+    evidence: 
+      - "services[web_app].update_config.failure_action=rollback"
+      - "services[web_app].healthcheck.test"
+    default: rollback
+    chosen: rollback
+    reason: "accepted the planner's default"
+  - id: rollout.monitor.estate
+    component: rollout
+    kind: value
+    subject: 
+      kind: estate
+      name: estate
+    question: "How long is a batch watched after it changes over, before the deploy moves on? A systemd time span (systemd.time(7)), used for every service whose source named no monitor window."
+    format: text
+    evidence: 
+      - "services[web_app].update_config.monitor=30s"
+      - the longest monitor window the source names
+    default: 30s
+    chosen: 30s
     reason: "accepted the planner's default"

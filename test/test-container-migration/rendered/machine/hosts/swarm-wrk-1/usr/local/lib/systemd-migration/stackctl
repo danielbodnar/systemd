@@ -1,0 +1,953 @@
+#!/bin/sh
+# SPDX-License-Identifier: LGPL-2.1-or-later
+#
+# stackctl: the rollout controller the systemd-migration plugin installs at
+# /usr/local/lib/systemd-migration/stackctl. It does on a systemd host what
+# docker service update, docker stack deploy, docker service rollback, and
+# docker node update --availability drain do on a Swarm node, and it invents
+# nothing: every unit name, socket name, credential name, image path, batch
+# size, delay, order, failure action, and monitor window comes from the
+# rollout specification the renderer wrote under /etc/systemd-migration/rollout/,
+# which in turn comes from the plan and from expected.json.
+#
+# Verbs. Every one of them takes --dry-run, which prints the commands that
+# would change something and runs only the queries:
+#
+#   deploy STACK [--image NAME=REF]...   roll the stack's services over, batch
+#                                        by batch, in each service's order
+#   rollback STACK [SERVICE]             the same walk with the image target
+#                                        the last deploy replaced
+#   drain HOST                           stop this host's sockets and instances
+#   activate HOST                        start them again
+#   scale SERVICE N                      run N of the rendered instances
+#   rotate credential NAME               re-import the credential, restart its
+#                                        consumers
+#   rotate config NAME                   refresh the configuration, restart its
+#                                        consumers
+#   status STACK                         instances, versions, health results
+#
+# Exit codes:
+#
+#   0  the verb finished; for deploy and rollback, every batch came back
+#      active and healthy within its monitor window
+#   1  a batch did not come back within its monitor window (FailureAction was
+#      applied), or a verb could not finish what it started
+#   2  usage: an unknown verb, a missing or malformed argument, a stack or
+#      service this host does not run, a scale beyond the rendered instances
+#   3  the rollout specification is missing or malformed
+#   4  something the specification names is not on this host (the credential
+#      import script, systemd-confext, the image pull script)
+#
+# Environment, for tests and for running the controller from a checkout:
+#
+#   SYSTEMD_MIGRATION_ROLLOUT_DIR   specification directory (default
+#                                   /etc/systemd-migration/rollout)
+#   SYSTEMD_MIGRATION_STATE_DIR     overrides StateDirectory= from the
+#                                   specification
+#   SYSTEMD_MIGRATION_PULL_SCRIPT   the machined skill's pull-images.sh
+#                                   (default
+#                                   /usr/local/lib/systemd-migration/pull-images.sh)
+#
+# Only systemctl, systemd-run, journalctl, machinectl, systemd-confext (for
+# rotate config on a confext stack), the credential import script, and the
+# image pull script are called; everything else is the shell and the file
+# utilities every host has.
+
+set -eu
+
+me=stackctl
+self=$0
+spec_dir=${SYSTEMD_MIGRATION_ROLLOUT_DIR:-/etc/systemd-migration/rollout}
+pull_script=${SYSTEMD_MIGRATION_PULL_SCRIPT:-/usr/local/lib/systemd-migration/pull-images.sh}
+dry_run=0
+
+log() {
+    printf '%s: %s\n' "$me" "$*" >&2
+}
+
+die() {
+    d_code=$1
+    shift
+    log "$*"
+    exit "$d_code"
+}
+
+usage() {
+    cat <<'USAGE'
+usage: stackctl VERB [ARGUMENT...] [--dry-run]
+
+  deploy STACK [--image NAME=REF]...   roll the stack's services over
+  rollback STACK [SERVICE]             restore the image the last deploy replaced
+  drain HOST                           stop this host's sockets and instances
+  activate HOST                        start them again
+  scale SERVICE N                      run N of the rendered instances
+  rotate credential NAME               re-import a credential, restart consumers
+  rotate config NAME                   refresh a configuration, restart consumers
+  status STACK                         instances, versions, health results
+
+exit: 0 done, 1 a batch did not come back, 2 usage, 3 bad specification,
+      4 something the specification names is missing on this host
+USAGE
+    exit "${1:-2}"
+}
+
+# Every command that changes something goes through run(): it is printed with
+# a leading "+ " whether or not it runs, so a --dry-run and a real run print
+# the same sequence of commands.
+run() {
+    printf '+ %s\n' "$*"
+    [ "$dry_run" -eq 0 ] || return 0
+    "$@"
+}
+
+# A command that only reads. It is not printed, so the printed sequence is
+# exactly what the verb changes, and it runs under --dry-run too.
+query() {
+    "$@"
+}
+
+trim() {
+    trimmed=$1
+    trimmed=${trimmed#"${trimmed%%[![:space:]]*}"}
+    trimmed=${trimmed%"${trimmed##*[![:space:]]}"}
+}
+
+# reverse LIST: the words of LIST, last first.
+reverse() {
+    r_out=
+    for r_w in $1; do
+        r_out="$r_w $r_out"
+    done
+    trim "$r_out"
+    printf '%s\n' "$trimmed"
+}
+
+# ---------------------------------------------------------------------------
+# Time spans
+# ---------------------------------------------------------------------------
+
+span_add() {
+    case $2 in
+        ''|s|sec|secs|second|seconds) span_total=$((span_total + $1)) ;;
+        ms|msec|msecs) span_total=$((span_total + ($1 + 999) / 1000)) ;;
+        m|min|mins|minute|minutes) span_total=$((span_total + $1 * 60)) ;;
+        h|hr|hrs|hour|hours) span_total=$((span_total + $1 * 3600)) ;;
+        d|day|days) span_total=$((span_total + $1 * 86400)) ;;
+        *) return 1 ;;
+    esac
+}
+
+# span_seconds SPAN: the span in whole seconds, rounded up. Accepts what the
+# renderer writes (0s, 10s, 30s, 1min 30s, 2h, 500ms) and fails on the rest.
+span_seconds() {
+    sp_in=$1
+    span_total=0
+    sp_num=
+    sp_unit=
+    sp_have=0
+    while [ -n "$sp_in" ]; do
+        sp_c=${sp_in%"${sp_in#?}"}
+        sp_in=${sp_in#?}
+        case $sp_c in
+            [0-9])
+                if [ -n "$sp_unit" ]; then
+                    span_add "$sp_num" "$sp_unit" || return 1
+                    sp_num=
+                    sp_unit=
+                fi
+                sp_num=$sp_num$sp_c
+                sp_have=1
+                ;;
+            [A-Za-z])
+                [ -n "$sp_num" ] || return 1
+                sp_unit=$sp_unit$sp_c
+                ;;
+            ' ') ;;
+            *) return 1 ;;
+        esac
+    done
+    [ "$sp_have" -eq 1 ] || return 1
+    span_add "$sp_num" "$sp_unit" || return 1
+    printf '%s\n' "$span_total"
+}
+
+# ---------------------------------------------------------------------------
+# The specification
+# ---------------------------------------------------------------------------
+
+spec_path() {
+    printf '%s/%s.conf\n' "$spec_dir" "$1"
+}
+
+spec_files() {
+    for s_f in "$spec_dir"/*.conf; do
+        [ -f "$s_f" ] || continue
+        printf '%s\n' "$s_f"
+    done
+}
+
+# spec_check FILE: the file exists, every line belongs to a section, the
+# [Rollout] section names the stack and the host, and every [Service NAME]
+# section carries a non-empty Units= and values this controller understands.
+spec_check() {
+    sc_file=$1
+    [ -f "$sc_file" ] || die 3 "no rollout specification at $sc_file; render the stack again"
+    sc_section=
+    sc_lineno=0
+    sc_stack=
+    sc_host=
+    sc_services=0
+    sc_units=
+    sc_name=
+    while IFS= read -r sc_line || [ -n "$sc_line" ]; do
+        sc_lineno=$((sc_lineno + 1))
+        trim "$sc_line"
+        sc_line=$trimmed
+        case $sc_line in
+            ''|'#'*|';'*)
+                continue
+                ;;
+            '['*']')
+                if [ -n "$sc_name" ] && [ -z "$sc_units" ]; then
+                    die 3 "$sc_file: section [Service $sc_name] has no Units="
+                fi
+                sc_section=${sc_line#\[}
+                sc_section=${sc_section%\]}
+                sc_name=
+                sc_units=
+                case $sc_section in
+                    Rollout) ;;
+                    'Service '*)
+                        sc_name=${sc_section#Service }
+                        [ -n "$sc_name" ] || die 3 "$sc_file:$sc_lineno: a [Service ] section needs a name"
+                        sc_services=$((sc_services + 1))
+                        ;;
+                    *) die 3 "$sc_file:$sc_lineno: unknown section [$sc_section]" ;;
+                esac
+                continue
+                ;;
+            *=*) ;;
+            *) die 3 "$sc_file:$sc_lineno: not a key=value line" ;;
+        esac
+        [ -n "$sc_section" ] || die 3 "$sc_file:$sc_lineno: assignment before any section"
+        trim "${sc_line%%=*}"
+        sc_key=$trimmed
+        trim "${sc_line#*=}"
+        sc_value=$trimmed
+        case $sc_key in
+            Stack) sc_stack=$sc_value ;;
+            Host) sc_host=$sc_value ;;
+            Units) sc_units=$sc_units$sc_value ;;
+            Order)
+                case $sc_value in
+                    start-first|stop-first) ;;
+                    *) die 3 "$sc_file:$sc_lineno: Order=$sc_value is neither start-first nor stop-first" ;;
+                esac
+                ;;
+            FailureAction)
+                case $sc_value in
+                    pause|continue|rollback) ;;
+                    *) die 3 "$sc_file:$sc_lineno: FailureAction=$sc_value is none of pause, continue, rollback" ;;
+                esac
+                ;;
+            Parallelism)
+                case $sc_value in
+                    ''|*[!0-9]*|0) die 3 "$sc_file:$sc_lineno: Parallelism=$sc_value is not a positive whole number" ;;
+                esac
+                ;;
+            Delay|Monitor)
+                span_seconds "$sc_value" >/dev/null || die 3 "$sc_file:$sc_lineno: $sc_key=$sc_value is not a time span"
+                ;;
+        esac
+    done < "$sc_file"
+    if [ -n "$sc_name" ] && [ -z "$sc_units" ]; then
+        die 3 "$sc_file: section [Service $sc_name] has no Units="
+    fi
+    [ -n "$sc_stack" ] || die 3 "$sc_file: the [Rollout] section has no Stack="
+    [ -n "$sc_host" ] || die 3 "$sc_file: the [Rollout] section has no Host="
+    [ "$sc_services" -gt 0 ] || die 3 "$sc_file: no [Service NAME] section; nothing to roll out"
+}
+
+# spec_list FILE SECTION KEY: every assignment of KEY in SECTION, appended
+# like a list setting in systemd.unit(5).
+spec_list() {
+    sl_in=0
+    sl_out=
+    while IFS= read -r sl_line || [ -n "$sl_line" ]; do
+        trim "$sl_line"
+        sl_line=$trimmed
+        case $sl_line in
+            ''|'#'*|';'*) continue ;;
+            '['*']')
+                sl_cur=${sl_line#\[}
+                sl_cur=${sl_cur%\]}
+                if [ "$sl_cur" = "$2" ]; then sl_in=1; else sl_in=0; fi
+                continue
+                ;;
+        esac
+        [ "$sl_in" -eq 1 ] || continue
+        case $sl_line in
+            "$3="*)
+                trim "${sl_line#*=}"
+                [ -z "$trimmed" ] || sl_out="$sl_out $trimmed"
+                ;;
+        esac
+    done < "$1"
+    trim "$sl_out"
+    printf '%s\n' "$trimmed"
+}
+
+# spec_value FILE SECTION KEY [FALLBACK]: the last assignment of KEY, whole,
+# or FALLBACK when there is none.
+spec_value() {
+    sv_in=0
+    sv_out=
+    sv_seen=0
+    while IFS= read -r sv_line || [ -n "$sv_line" ]; do
+        trim "$sv_line"
+        sv_line=$trimmed
+        case $sv_line in
+            ''|'#'*|';'*) continue ;;
+            '['*']')
+                sv_cur=${sv_line#\[}
+                sv_cur=${sv_cur%\]}
+                if [ "$sv_cur" = "$2" ]; then sv_in=1; else sv_in=0; fi
+                continue
+                ;;
+        esac
+        [ "$sv_in" -eq 1 ] || continue
+        case $sv_line in
+            "$3="*)
+                trim "${sv_line#*=}"
+                sv_out=$trimmed
+                sv_seen=1
+                ;;
+        esac
+    done < "$1"
+    if [ "$sv_seen" -eq 1 ] && [ -n "$sv_out" ]; then
+        printf '%s\n' "$sv_out"
+    else
+        printf '%s\n' "${4:-}"
+    fi
+}
+
+# spec_services FILE: the service names, in the order their sections appear,
+# which is the rollout order.
+spec_services() {
+    while IFS= read -r ss_line || [ -n "$ss_line" ]; do
+        trim "$ss_line"
+        case $trimmed in
+            '[Service '*']')
+                ss_name=${trimmed#\[Service }
+                printf '%s\n' "${ss_name%\]}"
+                ;;
+        esac
+    done < "$1"
+}
+
+state_of() {
+    if [ -n "${SYSTEMD_MIGRATION_STATE_DIR:-}" ]; then
+        printf '%s\n' "$SYSTEMD_MIGRATION_STATE_DIR"
+    else
+        spec_value "$1" Rollout StateDirectory /var/lib/systemd-migration/rollout
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Units
+# ---------------------------------------------------------------------------
+
+# health_unit UNIT HEALTHLIST: the health unit of an instance when the
+# renderer made one. The base of systemd-nspawn@NAME.service is NAME.
+health_unit() {
+    hu_base=${1%.service}
+    case $hu_base in
+        *@*) hu_base=${hu_base#*@} ;;
+    esac
+    for hu_h in $2; do
+        if [ "$hu_h" = "$hu_base-health.service" ]; then
+            printf '%s\n' "$hu_h"
+            return 0
+        fi
+    done
+    printf '\n'
+}
+
+unit_active() {
+    [ "$(query systemctl is-active "$1" 2>/dev/null || true)" = active ]
+}
+
+# health_ok HEALTHUNIT: the last run of the healthcheck succeeded. A health
+# unit that never ran reports success, which is what systemd reports too.
+health_ok() {
+    [ -n "$1" ] || return 0
+    ho_result=$(query systemctl show -p Result --value "$1" 2>/dev/null || true)
+    case $ho_result in
+        ''|success) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# poll_batch SECONDS HEALTHLIST UNIT...: every unit stays active and every
+# health unit it has keeps reporting success for the whole window.
+poll_batch() {
+    p_left=$1
+    p_health=$2
+    shift 2
+    # A lone "-" is the empty health list, so the argument list stays positional.
+    [ "$p_health" != "-" ] || p_health=
+    while :; do
+        for p_u in "$@"; do
+            unit_active "$p_u" || return 1
+            p_h=$(health_unit "$p_u" "$p_health")
+            health_ok "$p_h" || return 1
+        done
+        [ "$p_left" -gt 0 ] || return 0
+        sleep 1
+        p_left=$((p_left - 1))
+    done
+}
+
+# monitor_batch SECONDS HEALTHLIST UNIT...: watch a batch for its monitor
+# window. The wait is bounded by systemd rather than by this script: the poll
+# runs as a transient service with RuntimeMaxSec= set to the window, so a
+# health unit that never returns cannot hang a deploy. Without systemd-run (a
+# container, a test) the poll runs here and counts the seconds itself.
+monitor_batch() {
+    mb_seconds=$1
+    mb_health=$2
+    shift 2
+    [ "$mb_seconds" -gt 0 ] || return 0
+    if [ "$dry_run" -eq 0 ] && ! command -v systemd-run >/dev/null 2>&1; then
+        poll_batch "$mb_seconds" "$mb_health" "$@"
+        return
+    fi
+    run systemd-run --quiet --wait --collect -p RuntimeMaxSec="${mb_seconds}s" \
+        --description=stackctl-monitor "$self" monitor-batch "$mb_seconds" "${mb_health:--}" "$@"
+}
+
+# ---------------------------------------------------------------------------
+# The batch walk
+# ---------------------------------------------------------------------------
+
+# change_batch NAME ORDER ALLUNITS HEALTHLIST MONITORSECONDS BATCH
+change_batch() {
+    c_name=$1
+    c_order=$2
+    c_all=$3
+    c_health=$4
+    c_monitor=$5
+    c_batch=$6
+    if [ "$c_order" = start-first ]; then
+        # The instances outside the batch carry the service while the batch
+        # restarts, so they are confirmed active before anything is touched.
+        for c_u in $c_all; do
+            case " $c_batch " in
+                *" $c_u "*) continue ;;
+            esac
+            if ! unit_active "$c_u"; then
+                log "$c_name: $c_u is not active, so a start-first batch would take the service below its capacity"
+                return 1
+            fi
+        done
+        # shellcheck disable=SC2086
+        run systemctl restart $c_batch || return 1
+    else
+        # shellcheck disable=SC2086
+        run systemctl stop $c_batch || return 1
+        # shellcheck disable=SC2086
+        run systemctl start $c_batch || return 1
+    fi
+    # shellcheck disable=SC2086
+    monitor_batch "$c_monitor" "$c_health" $c_batch
+}
+
+# batch_failed FILE NAME MODE FAILUREACTION BATCH: returns 0 when the walk
+# should carry on with the next batch, non-zero when it must stop here.
+batch_failed() {
+    bf_file=$1
+    bf_name=$2
+    bf_mode=$3
+    bf_action=$4
+    bf_batch=$5
+    for bf_u in $bf_batch; do
+        run journalctl -u "$bf_u" -n 20 --no-pager
+    done
+    if [ "$bf_mode" != deploy ]; then
+        log "$bf_name: $bf_batch did not come back within the monitor window"
+        return 1
+    fi
+    case $bf_action in
+        continue)
+            log "$bf_name: $bf_batch did not come back; FailureAction=continue, so the walk goes on"
+            return 0
+            ;;
+        rollback)
+            log "$bf_name: $bf_batch did not come back; FailureAction=rollback"
+            rollback_service "$bf_file" "$bf_name" || true
+            return 1
+            ;;
+        *)
+            log "$bf_name: $bf_batch did not come back; FailureAction=pause, so the remaining batches are left alone"
+            return 1
+            ;;
+    esac
+}
+
+# walk_service FILE NAME MODE: change the service's instances over in batches
+# of Parallelism, in its Order, waiting Delay between batches and watching each
+# batch for Monitor. MODE is "deploy" (apply FailureAction on a failure) or
+# "restart" (a rotation or a rollback: a failure stops the walk).
+walk_service() {
+    w_file=$1
+    w_name=$2
+    w_mode=$3
+    w_section="Service $w_name"
+    w_units=$(spec_list "$w_file" "$w_section" Units)
+    if [ -z "$w_units" ]; then
+        log "$w_name: no instances on this host"
+        return 0
+    fi
+    w_health=$(spec_list "$w_file" "$w_section" Health)
+    w_parallelism=$(spec_value "$w_file" "$w_section" Parallelism 1)
+    w_delay=$(spec_value "$w_file" "$w_section" Delay 0s)
+    w_order=$(spec_value "$w_file" "$w_section" Order stop-first)
+    w_action=$(spec_value "$w_file" "$w_section" FailureAction pause)
+    w_monitor=$(spec_value "$w_file" "$w_section" Monitor "$(spec_value "$w_file" Rollout Monitor 30s)")
+    w_delay_s=$(span_seconds "$w_delay")
+    w_monitor_s=$(span_seconds "$w_monitor")
+    w_count=0
+    for w_u in $w_units; do
+        w_count=$((w_count + 1))
+    done
+    if [ "$w_order" = start-first ] && [ "$w_count" -le "$w_parallelism" ]; then
+        log "$w_name: start-first cannot hold capacity with $w_count instance(s) and Parallelism=$w_parallelism on this host; the batch stops and starts"
+        w_order=stop-first
+    fi
+    w_batch=
+    w_n=0
+    w_done=0
+    w_failed=0
+    for w_u in $w_units; do
+        w_batch="$w_batch $w_u"
+        w_n=$((w_n + 1))
+        w_done=$((w_done + 1))
+        if [ "$w_n" -lt "$w_parallelism" ] && [ "$w_done" -lt "$w_count" ]; then
+            continue
+        fi
+        trim "$w_batch"
+        w_batch=$trimmed
+        if ! change_batch "$w_name" "$w_order" "$w_units" "$w_health" "$w_monitor_s" "$w_batch"; then
+            w_failed=1
+            if ! batch_failed "$w_file" "$w_name" "$w_mode" "$w_action" "$w_batch"; then
+                return 1
+            fi
+        fi
+        w_batch=
+        w_n=0
+        if [ "$w_done" -lt "$w_count" ] && [ "$w_delay_s" -gt 0 ]; then
+            run sleep "$w_delay_s"
+        fi
+    done
+    return "$w_failed"
+}
+
+# ---------------------------------------------------------------------------
+# Images
+# ---------------------------------------------------------------------------
+
+image_of() {
+    spec_value "$1" "Service $2" Image
+}
+
+# service_for_image FILE IMAGENAME: the service whose image carries that local
+# name, or nothing.
+service_for_image() {
+    for sf_s in $(spec_services "$1"); do
+        sf_img=$(image_of "$1" "$sf_s")
+        [ -n "$sf_img" ] || continue
+        sf_base=${sf_img##*/}
+        if [ "${sf_base%.*}" = "$2" ]; then
+            printf '%s\n' "$sf_s"
+            return 0
+        fi
+    done
+    printf '\n'
+}
+
+# swap_image PATH TARGET: point PATH at TARGET atomically. A path that is a
+# real directory is left alone: a version cannot be selected by a symlink
+# until the operator has moved that directory into the .v/ directory.
+swap_image() {
+    if [ -e "$1" ] && [ ! -L "$1" ]; then
+        die 2 "$1 is a directory, not a symlink; move it into $1.v/ and link $1 at it before the controller can swap versions"
+    fi
+    run ln -s "$2" "$1.stackctl.tmp"
+    run mv "$1.stackctl.tmp" "$1"
+}
+
+# stage_image FILE STACK NAME REF: pull REF as a new version of the local
+# image NAME and point the unit's image path at it. The path in the unit never
+# changes; the versions live in the systemd.v(7) directory next to it
+# (NAME.SUFFIX.v/NAME_VERSION.SUFFIX) and the path is the symlink that selects
+# one, so a rollback is a symlink swap and no unit is edited.
+stage_image() {
+    si_file=$1
+    si_stack=$2
+    si_name=$3
+    si_ref=$4
+    si_svc=$(service_for_image "$si_file" "$si_name")
+    [ -n "$si_svc" ] || die 2 "no service in $si_file has an image named $si_name"
+    si_img=$(image_of "$si_file" "$si_svc")
+    si_dir=${si_img%/*}
+    si_base=${si_img##*/}
+    si_suffix=${si_base##*.}
+    si_stem=${si_base%.*}
+    si_version=${si_ref##*/}
+    case $si_version in
+        *:*) si_version=${si_version##*:} ;;
+        *) si_version=latest ;;
+    esac
+    case $si_version in
+        ''|*[!A-Za-z0-9._-]*) die 2 "the tag of $si_ref is not a plain version" ;;
+    esac
+    si_new="${si_stem}_${si_version}"
+    si_vdir="$si_dir/$si_stem.$si_suffix.v"
+    si_target="$si_vdir/$si_new.$si_suffix"
+    si_state=$(state_of "$si_file")
+    si_manifest="/run/systemd-migration/$si_stack-$si_new.images.json"
+    if [ -x "$pull_script" ] || [ "$dry_run" -eq 1 ]; then
+        run mkdir -p /run/systemd-migration
+        if [ "$dry_run" -eq 1 ]; then
+            printf '+ write %s: %s <- %s\n' "$si_manifest" "$si_new" "$si_ref"
+        else
+            printf '{\n  "%s": {\n    "ref": "%s",\n    "digest": null,\n    "hosts": ["%s"],\n    "services": ["%s"]\n  }\n}\n' \
+                "$si_new" "$si_ref" "$(spec_value "$si_file" Rollout Host)" "$si_svc" > "$si_manifest"
+        fi
+        run "$pull_script" "$si_manifest"
+    else
+        die 4 "$pull_script is not on this host; pull $si_ref as $si_new with the machined skill's pull-images.sh and deploy again"
+    fi
+    run mkdir -p "$si_vdir"
+    if [ "$dry_run" -eq 0 ] && [ -e "$si_dir/$si_new.$si_suffix" ] && [ ! -e "$si_target" ]; then
+        run mv "$si_dir/$si_new.$si_suffix" "$si_target"
+    fi
+    run mkdir -p "$si_state"
+    if [ "$dry_run" -eq 0 ] && [ -L "$si_img" ]; then
+        readlink "$si_img" > "$si_state/$si_stack.$si_name.previous"
+    fi
+    swap_image "$si_img" "$si_target"
+}
+
+# rollback_service FILE NAME: put the image target the last deploy replaced
+# back and walk the service's instances in its own batches and order.
+rollback_service() {
+    rs_file=$1
+    rs_name=$2
+    rs_stack=$(spec_value "$rs_file" Rollout Stack)
+    rs_state=$(state_of "$rs_file")
+    rs_img=$(image_of "$rs_file" "$rs_name")
+    rs_local=${rs_img##*/}
+    rs_local=${rs_local%.*}
+    rs_previous="$rs_state/$rs_stack.$rs_local.previous"
+    if [ -f "$rs_previous" ]; then
+        swap_image "$rs_img" "$(cat "$rs_previous")"
+        run rm -f "$rs_previous"
+    else
+        log "$rs_name: no deploy recorded a previous image under $rs_state; the instances restart on whatever $rs_img selects"
+    fi
+    walk_service "$rs_file" "$rs_name" restart
+}
+
+# ---------------------------------------------------------------------------
+# Verbs
+# ---------------------------------------------------------------------------
+
+verb_deploy() {
+    vd_stack=$1
+    shift
+    vd_file=$(spec_path "$vd_stack")
+    spec_check "$vd_file"
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --image)
+                [ $# -ge 2 ] || die 2 "--image wants NAME=REF"
+                case $2 in
+                    *=*) ;;
+                    *) die 2 "--image wants NAME=REF, got $2" ;;
+                esac
+                stage_image "$vd_file" "$vd_stack" "${2%%=*}" "${2#*=}"
+                shift 2
+                ;;
+            *) die 2 "unknown argument for deploy: $1" ;;
+        esac
+    done
+    vd_failed=0
+    for vd_s in $(spec_services "$vd_file"); do
+        walk_service "$vd_file" "$vd_s" deploy || vd_failed=1
+    done
+    [ "$vd_failed" -eq 0 ] || exit 1
+}
+
+verb_rollback() {
+    vr_stack=$1
+    vr_file=$(spec_path "$vr_stack")
+    spec_check "$vr_file"
+    vr_failed=0
+    if [ $# -ge 2 ] && [ -n "$2" ]; then
+        vr_have=0
+        for vr_s in $(spec_services "$vr_file"); do
+            if [ "$vr_s" = "$2" ]; then vr_have=1; fi
+        done
+        [ "$vr_have" -eq 1 ] || die 2 "stack $vr_stack does not run $2 on this host"
+        rollback_service "$vr_file" "$2" || vr_failed=1
+    else
+        for vr_s in $(spec_services "$vr_file"); do
+            rollback_service "$vr_file" "$vr_s" || vr_failed=1
+        done
+    fi
+    [ "$vr_failed" -eq 0 ] || exit 1
+}
+
+# check_host HOST: the controller only ever acts on the host it was rendered
+# for, so a drain aimed at another host is a mistake, not a remote call.
+check_host() {
+    ch_seen=
+    for ch_f in $(spec_files); do
+        ch_h=$(spec_value "$ch_f" Rollout Host)
+        ch_seen=$ch_h
+        if [ "$ch_h" = "$1" ]; then
+            return 0
+        fi
+    done
+    [ -n "$ch_seen" ] || die 3 "no rollout specification under $spec_dir"
+    die 2 "this controller was rendered for $ch_seen, not $1"
+}
+
+verb_drain() {
+    check_host "$1"
+    for vg_f in $(reverse "$(spec_files)"); do
+        spec_check "$vg_f"
+        for vg_s in $(reverse "$(spec_services "$vg_f")"); do
+            vg_sockets=$(spec_list "$vg_f" "Service $vg_s" Sockets)
+            vg_units=$(spec_list "$vg_f" "Service $vg_s" Units)
+            # The sockets go first, so nothing new arrives while the instances stop.
+            # shellcheck disable=SC2086
+            [ -z "$vg_sockets" ] || run systemctl stop $vg_sockets
+            # shellcheck disable=SC2086
+            [ -z "$vg_units" ] || run systemctl stop $(reverse "$vg_units")
+        done
+    done
+}
+
+verb_activate() {
+    check_host "$1"
+    for va_f in $(spec_files); do
+        spec_check "$va_f"
+        for va_s in $(spec_services "$va_f"); do
+            va_sockets=$(spec_list "$va_f" "Service $va_s" Sockets)
+            va_units=$(spec_list "$va_f" "Service $va_s" Units)
+            # shellcheck disable=SC2086
+            [ -z "$va_units" ] || run systemctl start $va_units
+            # shellcheck disable=SC2086
+            [ -z "$va_sockets" ] || run systemctl start $va_sockets
+        done
+    done
+}
+
+verb_scale() {
+    vs_name=$1
+    vs_want=$2
+    case $vs_want in
+        ''|*[!0-9]*) die 2 "scale wants a whole number of instances, got $vs_want" ;;
+    esac
+    vs_file=
+    for vs_f in $(spec_files); do
+        for vs_s in $(spec_services "$vs_f"); do
+            if [ "$vs_s" = "$vs_name" ]; then vs_file=$vs_f; fi
+        done
+    done
+    [ -n "$vs_file" ] || die 2 "no rollout specification under $spec_dir runs $vs_name on this host"
+    spec_check "$vs_file"
+    vs_units=$(spec_list "$vs_file" "Service $vs_name" Units)
+    vs_count=0
+    for vs_u in $vs_units; do
+        vs_count=$((vs_count + 1))
+    done
+    if [ "$vs_want" -gt "$vs_count" ]; then
+        die 2 "$vs_name has $vs_count rendered instance(s) on this host; $vs_want is a re-render, not a scale: raise placement.hosts.$vs_name (and placement.scale_out.estate for more than one instance per host) in plan.yaml, render again, and install"
+    fi
+    vs_i=0
+    vs_start=
+    vs_stop=
+    for vs_u in $vs_units; do
+        vs_i=$((vs_i + 1))
+        if [ "$vs_i" -le "$vs_want" ]; then
+            vs_start="$vs_start $vs_u"
+        else
+            vs_stop="$vs_stop $vs_u"
+        fi
+    done
+    trim "$vs_start"
+    vs_start=$trimmed
+    trim "$vs_stop"
+    vs_stop=$trimmed
+    # shellcheck disable=SC2086
+    [ -z "$vs_stop" ] || run systemctl stop $(reverse "$vs_stop")
+    # shellcheck disable=SC2086
+    [ -z "$vs_start" ] || run systemctl start $vs_start
+}
+
+# consumers FILE KEY NAME: the services whose KEY list contains NAME, in
+# rollout order.
+consumers() {
+    for cs_s in $(spec_services "$1"); do
+        for cs_c in $(spec_list "$1" "Service $cs_s" "$2"); do
+            if [ "$cs_c" = "$3" ]; then
+                printf '%s\n' "$cs_s"
+                break
+            fi
+        done
+    done
+}
+
+verb_rotate() {
+    vt_kind=$1
+    vt_name=$2
+    case $vt_kind in
+        credential|config) ;;
+        *) die 2 "rotate wants credential or config, got $vt_kind" ;;
+    esac
+    [ -n "$vt_name" ] || die 2 "rotate $vt_kind wants a name"
+    vt_key=Credentials
+    [ "$vt_kind" = credential ] || vt_key=Configs
+    vt_found=0
+    vt_failed=0
+    for vt_f in $(spec_files); do
+        spec_check "$vt_f"
+        vt_list=$(consumers "$vt_f" "$vt_key" "$vt_name")
+        [ -n "$vt_list" ] || continue
+        vt_found=1
+        if [ "$vt_kind" = credential ]; then
+            vt_script=$(spec_value "$vt_f" Rollout CredentialScript /usr/local/lib/systemd-migration/import-credentials.sh)
+            if [ -x "$vt_script" ] || [ "$dry_run" -eq 1 ]; then
+                run "$vt_script"
+            else
+                die 4 "$vt_script is not on this host; install the rendered secrets/import-credentials.sh there and rotate again"
+            fi
+        elif [ "$(spec_value "$vt_f" Rollout ConfigForm files)" = confext ]; then
+            if command -v systemd-confext >/dev/null 2>&1 || [ "$dry_run" -eq 1 ]; then
+                run systemd-confext refresh
+            else
+                die 4 "systemd-confext is not on this host, but this stack's configuration ships as a confext"
+            fi
+        else
+            log "$vt_name ships as a file under /etc/$(spec_value "$vt_f" Rollout Stack)/configs/; put the new content there before the consumers restart"
+        fi
+        for vt_s in $vt_list; do
+            walk_service "$vt_f" "$vt_s" restart || vt_failed=1
+        done
+    done
+    [ "$vt_found" -eq 1 ] || die 2 "no service on this host lists $vt_name under $vt_key"
+    [ "$vt_failed" -eq 0 ] || exit 1
+}
+
+verb_status() {
+    vz_file=$(spec_path "$1")
+    spec_check "$vz_file"
+    printf 'stack %s on %s\n' "$(spec_value "$vz_file" Rollout Stack)" "$(spec_value "$vz_file" Rollout Host)"
+    for vz_s in $(spec_services "$vz_file"); do
+        vz_units=$(spec_list "$vz_file" "Service $vz_s" Units)
+        vz_health=$(spec_list "$vz_file" "Service $vz_s" Health)
+        vz_img=$(image_of "$vz_file" "$vz_s")
+        vz_form=$(spec_value "$vz_file" "Service $vz_s" Form service)
+        printf '  %s (%s, order %s, failure %s, parallelism %s)\n' \
+            "$vz_s" "$vz_form" \
+            "$(spec_value "$vz_file" "Service $vz_s" Order stop-first)" \
+            "$(spec_value "$vz_file" "Service $vz_s" FailureAction pause)" \
+            "$(spec_value "$vz_file" "Service $vz_s" Parallelism 1)"
+        if [ -n "$vz_img" ]; then
+            if [ -L "$vz_img" ]; then
+                printf '    image %s -> %s\n' "$vz_img" "$(readlink "$vz_img")"
+            else
+                printf '    image %s\n' "$vz_img"
+            fi
+        fi
+        for vz_u in $vz_units; do
+            vz_state=$(query systemctl is-active "$vz_u" 2>/dev/null || true)
+            vz_h=$(health_unit "$vz_u" "$vz_health")
+            if [ -n "$vz_h" ]; then
+                vz_result=$(query systemctl show -p Result --value "$vz_h" 2>/dev/null || true)
+                printf '    %s %s, health %s\n' "$vz_u" "${vz_state:-unknown}" "${vz_result:-none}"
+            else
+                printf '    %s %s, no healthcheck\n' "$vz_u" "${vz_state:-unknown}"
+            fi
+            if [ "$vz_form" = machine ] && command -v machinectl >/dev/null 2>&1; then
+                vz_base=${vz_u%.service}
+                vz_base=${vz_base#*@}
+                printf '    machine %s %s\n' "$vz_base" \
+                    "$(query machinectl show "$vz_base" --property=State --value 2>/dev/null || echo absent)"
+            fi
+        done
+    done
+}
+
+# ---------------------------------------------------------------------------
+# Arguments
+# ---------------------------------------------------------------------------
+
+argc=$#
+i=0
+while [ "$i" -lt "$argc" ]; do
+    a=$1
+    shift
+    i=$((i + 1))
+    case $a in
+        --dry-run) dry_run=1 ;;
+        -h|--help) usage 0 ;;
+        *) set -- "$@" "$a" ;;
+    esac
+done
+
+[ $# -ge 1 ] || usage 2
+verb=$1
+shift
+
+case $verb in
+    deploy)
+        [ $# -ge 1 ] || die 2 "deploy wants a stack"
+        verb_deploy "$@"
+        ;;
+    rollback)
+        [ $# -ge 1 ] || die 2 "rollback wants a stack"
+        verb_rollback "$@"
+        ;;
+    drain)
+        [ $# -eq 1 ] || die 2 "drain wants one host"
+        verb_drain "$1"
+        ;;
+    activate)
+        [ $# -eq 1 ] || die 2 "activate wants one host"
+        verb_activate "$1"
+        ;;
+    scale)
+        [ $# -eq 2 ] || die 2 "scale wants a service and a count"
+        verb_scale "$1" "$2"
+        ;;
+    rotate)
+        [ $# -eq 2 ] || die 2 "rotate wants credential NAME or config NAME"
+        verb_rotate "$1" "$2"
+        ;;
+    status)
+        [ $# -eq 1 ] || die 2 "status wants one stack"
+        verb_status "$1"
+        ;;
+    monitor-batch)
+        # Internal: the bounded poll that monitor_batch starts with systemd-run.
+        [ $# -ge 3 ] || die 2 "monitor-batch wants a window, a health list, and units"
+        poll_batch "$@"
+        ;;
+    *)
+        die 2 "unknown verb $verb"
+        ;;
+esac

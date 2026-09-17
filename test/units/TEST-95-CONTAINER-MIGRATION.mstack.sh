@@ -101,7 +101,7 @@ grep "^RootMStack=$IMAGE$" /run/systemd/system/web_app.service >/dev/null
 
 systemctl start web_app.service
 systemctl is-active web_app.service
-timeout 30 bash -c 'until journalctl -u web_app.service --no-pager | grep -q "app started with serve --port 8080"; do sleep 1; done'
+timeout 30 bash -c 'until journalctl -u web_app.service --no-pager | grep "app started with serve --port 8080" >/dev/null; do sleep 1; done'
 
 # The process runs in the merged tree with the credentials and the volume in place.
 PID="$(systemctl show -p MainPID --value web_app.service)"

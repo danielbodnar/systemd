@@ -19,10 +19,13 @@ done <<'MANIFEST'
 web/configs/web_caddyfile 0 0 0444
 MANIFEST
 cat /etc/hosts.d/systemd-migration.hosts >> /etc/hosts
+install -D -m 0755 "$here/usr/local/lib/systemd-migration/stackctl" '/usr/local/lib/systemd-migration/stackctl'
+install -d -m 0755 '/var/lib/systemd-migration/rollout'
 systemctl daemon-reload
+systemctl enable 'web.target'
 systemd-analyze verify '/etc/systemd/system/web_proxy.service' '/etc/systemd/system/web.target' '/etc/systemd/system/stack-web.slice'
 if [ "${1:-}" = "--start" ]; then
     systemctl enable --now 'web.target'
 else
-    echo "installed; start with: systemctl enable --now web.target"
+    echo "installed; start with: systemctl enable --now 'web.target'"
 fi

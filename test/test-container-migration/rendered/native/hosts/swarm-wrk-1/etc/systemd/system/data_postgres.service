@@ -7,6 +7,7 @@ PartOf=data.target
 After=network-online.target
 Wants=network-online.target
 ConditionHost=swarm-wrk-1
+StartLimitIntervalSec=0
 Wants=data_postgres-health.timer
 RequiresMountsFor=/var/lib/data/data_backups
 

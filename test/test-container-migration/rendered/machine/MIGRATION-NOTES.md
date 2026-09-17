@@ -1,6 +1,6 @@
 # Migration notes
 
-Rendered by systemd-migration from an inventory captured 2026-09-01T12:00:00Z (4 services, 2 nodes) against a plan of 54 decisions (54 chosen). Components composed, in order: machined, service, creds, resource-control, storage, networkd, resolved, journald, sysext, portable, quadlet, generator, rollout, haproxy.
+Rendered by systemd-migration from an inventory captured 2026-09-01T12:00:00Z (4 services, 2 nodes) against a plan of 62 decisions (62 chosen). Components composed, in order: machined, service, creds, resource-control, storage, networkd, resolved, journald, sysext, portable, quadlet, generator, rollout, haproxy.
 
 ## Host plan
 
@@ -31,9 +31,12 @@ Rendered by systemd-migration from an inventory captured 2026-09-01T12:00:00Z (4
 - swarm-mgr-1: host capabilities unknown (no probe file); images are assumed to mount as mount stacks
 - web_proxy: ran as root inside the container (no user set); DynamicUser=yes is rendered instead, set User= and Group= if the workload needs a fixed identity or must own its volumes
 - web_proxy: member of overlay network web_frontend (10.10.1.0/24, vxlan-wireguard); a plain service shares the host's network namespace, so it reaches peers by host address or the name the resolved component provides; the network's bridge is rendered for the machines attached to it
-- web_proxy: the source's VIP becomes one address per host; other services reach it by the host's address or a name the plan provides
+- web_proxy: the source's VIP becomes one address per host; other services reach it by the host's address or a name the plan provides, unless a published port chooses multipath and the plan gives it an address of its own
 - service names are resolved from /etc/hosts (decision resolved.discovery.estate); install.sh appends the rendered fragment once, dedupe it by hand on re-install
 - machines on zone vz-web_frontend are listed at their static lease address; on swarm-mgr-1 their DHCP lease names also resolve under _dhcp through the bridge's LocalLeaseDomain=
+- web_proxy: the source describes no update_config; the rollout specification takes parallelism 1, delay 0s, and max failure ratio 0, and the order and failure action come from rollout.order.web_proxy and rollout.failure.web_proxy when those decisions exist
+- swarm-mgr-1: /usr/local/lib/systemd-migration/stackctl drives deploy, rollback, drain, activate, scale, rotate, and status from /etc/systemd-migration/rollout/<stack>.conf; every verb takes --dry-run and prints the systemctl commands it would run
+- the service component gives each stack target [Install] WantedBy=multi-user.target but enables nothing; install.sh now runs systemctl enable over the stack targets, and install.sh --start still enables and starts them
 - swarm-wrk-1: host capabilities unknown (no probe file); images are assumed to mount as mount stacks
 - web_app: the group of user 1000:1000 is not set on the machine; systemd-nspawn takes the group from the container's user database
 - web_app: ran under an init shim (ProcessTwo=yes) but loads credentials as user 1000; systemd-nspawn can only make them readable when the payload is PID 1, so ProcessTwo= is left off and NoNewPrivileges=yes is set (systemd-nspawn(1), --uid=)
@@ -53,10 +56,12 @@ Rendered by systemd-migration from an inventory captured 2026-09-01T12:00:00Z (4
 - data_postgres: volume data_pgdata moves by "rsync" (decision storage.move.data_pgdata); the runbook step lands at /var/lib/data/data_pgdata
 - data_exporter: member of overlay network data_backend (10.10.2.0/24, local); a plain service shares the host's network namespace, so it reaches peers by host address or the name the resolved component provides; the network's bridge is rendered for the machines attached to it
 - data_exporter: member of macvlan network data_monitoring (192.168.50.128/25, local); a plain service shares the host's network namespace, so it reaches peers by host address or the name the resolved component provides; the network's bridge is rendered for the machines attached to it
-- data_exporter: the source's VIP becomes one address per host; other services reach it by the host's address or a name the plan provides
+- data_exporter: the source's VIP becomes one address per host; other services reach it by the host's address or a name the plan provides, unless a published port chooses multipath and the plan gives it an address of its own
 - data_postgres: member of overlay network data_backend (10.10.2.0/24, local); a plain service shares the host's network namespace, so it reaches peers by host address or the name the resolved component provides; the network's bridge is rendered for the machines attached to it
 - web_app: machine web_app joins zone vz-web_frontend with MAC 26:3b:af:b1:00:98 and static lease 10.10.1.2; the guest must run a DHCP client on host0 (systemd-networkd with the shipped 80-container-host0.network) to take the lease
 - machines on zone vz-web_frontend are listed at their static lease address; on swarm-wrk-1 their DHCP lease names also resolve under _dhcp through the bridge's LocalLeaseDomain=
+- data_exporter: the source describes no update_config; the rollout specification takes parallelism 1, delay 0s, and max failure ratio 0, and the order and failure action come from rollout.order.data_exporter and rollout.failure.data_exporter when those decisions exist
+- swarm-wrk-1: /usr/local/lib/systemd-migration/stackctl drives deploy, rollback, drain, activate, scale, rotate, and status from /etc/systemd-migration/rollout/<stack>.conf; every verb takes --dry-run and prints the systemctl commands it would run
 
 ## Carried over from the capture
 

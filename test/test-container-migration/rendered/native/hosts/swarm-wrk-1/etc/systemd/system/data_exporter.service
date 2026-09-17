@@ -7,6 +7,7 @@ PartOf=data.target
 After=network-online.target
 Wants=network-online.target
 ConditionHost=swarm-wrk-1
+StartLimitIntervalSec=0
 
 [Service]
 Type=exec
