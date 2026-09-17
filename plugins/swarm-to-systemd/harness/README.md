@@ -79,7 +79,7 @@ bun run src/cli.ts run migrate      # migration-lead coordinates all three and w
 
 `approvals.yaml` is a short ordered list of rules: a tool name, a regular expression over the bash command (or file path), and a decision. Read-only Docker queries, the plugin's own scripts, and common inspection commands are allowed; anything that changes the swarm or the host (`docker service update`, `systemctl start`, `install.sh`, `import-secrets.sh`) is denied with a reason the agent sees; secret value files are denied for bash, read, write, and edit; writes and edits are allowed only inside the migration artifacts (`rendered/`, `reports/`, the capture, the inventory, the host map, and the plan) and denied under host paths such as `/etc`; everything else asks. The agents' toolsets pause on every tool except read, glob, and grep, so this policy, not a server-side default, is what approves a write on the production host. The policy is the operator's contract with the agents, so keep it readable and test changes with `bun test`.
 
-The policy only applies to calls that pause. The auditor's tools run under the server's `auto` policy, which allows safe calls and denies high-risk ones on its own and pauses only when unsure; the writer agents put `bash` on `always_ask` so every command crosses the policy.
+The policy only applies to calls that pause, which is why every agent, the auditor included, puts `bash`, `write`, and `edit` on `always_ask` and allows only `read`, `glob`, and `grep` outright: each command and file write crosses the policy, and the capture scripts and capture directory are allowed there so the audit still runs unattended once those rules are accepted.
 
 ## Lab environment
 
