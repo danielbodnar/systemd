@@ -23,6 +23,22 @@ bun "${CLAUDE_PLUGIN_ROOT}/skills/podman-quadlet/scripts/render.ts" inventory.js
 
 Flags: `--scale-out` renders numbered instances when a service wants more replicas than eligible hosts; `--auto-update` adds `AutoUpdate=registry` to units whose image is tag-based; `--selinux` appends volume relabeling suffixes; `--unit-dir` and `--config-dir` change target paths for rootless or non-standard layouts.
 
+## As a component of the compose engine
+
+The same rendering is available per service through the plan: the `quadlet` component (`scripts/component.ts`) is registered in `contract/registry.ts`, so the engine's form decision (`form.service.<name>`) offers `quadlet` next to `service`, `machine`, `vm`, and `portable`. A service that takes it gets its `.container` (and the `.network` and `.volume` files it needs) under the unit directory of the rendered host tree, `<name>.service` in `expected.json` because Podman's generator produces it, a place in the stack target the service component writes, its published ports in `expected.json`, and its secrets in `secrets/import-secrets.sh`; the creds, storage, networkd, resource-control, and journald components leave a Quadlet service alone. The files are the ones `render.ts` writes, through the same functions.
+
+The component raises these estate-level decisions:
+
+| Decision | Kind | Default | Meaning |
+|---|---|---|---|
+| `quadlet.secrets.estate` | choice | `podman-secret` | Secrets and redacted variables become `Secret=` references created by `import-secrets.sh`. A systemd credential path is not offered because `podman-systemd.unit(5)` documents no way to hand one to the container. |
+| `quadlet.auto_update.estate` | choice yes/no | `no` | `AutoUpdate=registry` on tag-based images (the `--auto-update` flag). |
+| `quadlet.selinux.estate` | choice yes/no | `no` | Relabel suffixes on bind and config mounts (the `--selinux` flag). |
+| `quadlet.unit_dir.estate` | path | `/etc/containers/systemd` | Where the Quadlet files go (the `--unit-dir` flag). |
+| `quadlet.config_dir.estate` | path | `/etc/containers/swarm-configs` | Where config payloads go; raised only when the inventory has configs (the `--config-dir` flag). |
+
+Quadlet is Podman's interface rather than a systemd man page, so the component claims no page of the systemd surface and is listed under `adapters` in `contract/coverage.json`.
+
 ## Output tree
 
 ```
@@ -57,7 +73,8 @@ Read `references/field-map.md` for the complete field table with the reasoning b
 
 ## Files
 
-- `scripts/render.ts`: the renderer; importable (`render(inventory, options)`) and runnable.
+- `scripts/render.ts`: the renderer; importable (`render(inventory, options)`) and runnable. `renderContainer`, `networkUnit`, `volumeUnit`, `synthesizedVolumeUnit`, and `importScript` are exported for the component.
+- `scripts/component.ts`: the `quadlet` component the compose engine runs when the plan chooses the Quadlet form for a service.
 - `references/field-map.md`: Swarm service spec to Quadlet and systemd directive mapping, including what is lossy.
 - `references/alternatives.md`: non-container targets and when to choose them.
 - `references/example-web_app.container`: a rendered unit from the example inventory, kept as a reading aid.

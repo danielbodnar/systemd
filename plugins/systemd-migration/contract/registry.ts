@@ -18,6 +18,7 @@ import { resolvedComponent } from "../skills/systemd-resolved/scripts/component.
 import { journaldComponent } from "../skills/systemd-journald/scripts/component.ts";
 import { sysextComponent } from "../skills/systemd-sysext/scripts/component.ts";
 import { portableComponent } from "../skills/systemd-portable/scripts/component.ts";
+import { quadletComponent } from "../skills/podman-quadlet/scripts/component.ts";
 
 export const COMPONENTS: Component[] = [
   machinedComponent,
@@ -30,6 +31,7 @@ export const COMPONENTS: Component[] = [
   journaldComponent,
   sysextComponent,
   portableComponent,
+  quadletComponent,
 ];
 
 export function componentById(id: string): Component | undefined {

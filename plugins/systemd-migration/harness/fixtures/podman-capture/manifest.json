@@ -1,0 +1,9 @@
+{
+  "captured_at": "2026-09-10T08:00:00Z",
+  "captured_on": "podman-host-1",
+  "connection": "local",
+  "quadlet_captured": 1,
+  "quadlet_dirs": ["/etc/containers/systemd"],
+  "env_redacted": 1,
+  "tool": "systemd-migration/discover-podman/capture.sh"
+}

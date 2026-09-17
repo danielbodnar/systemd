@@ -1,0 +1,38 @@
+[
+  {
+    "Id": "1111111111111111111111111111111111111111111111111111111111111111",
+    "RepoTags": ["registry.example.com/acme/shop:2026.09"],
+    "RepoDigests": ["registry.example.com/acme/shop@sha256:0000000000000000000000000000000000000000000000000000000000000011"],
+    "Config": {
+      "Env": ["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"],
+      "Entrypoint": ["/usr/bin/shop"],
+      "Cmd": ["serve"],
+      "WorkingDir": "/srv/shop",
+      "User": "1000:1000",
+      "ExposedPorts": { "8080/tcp": {} },
+      "Labels": { "org.opencontainers.image.version": "2026.09" }
+    }
+  },
+  {
+    "Id": "2222222222222222222222222222222222222222222222222222222222222222",
+    "RepoTags": ["docker.io/library/postgres:16"],
+    "RepoDigests": ["docker.io/library/postgres@sha256:0000000000000000000000000000000000000000000000000000000000000022"],
+    "Config": {
+      "Env": [
+        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/lib/postgresql/16/bin",
+        "GOSU_VERSION=1.17",
+        "LANG=en_US.utf8",
+        "PG_MAJOR=16",
+        "PGDATA=/var/lib/postgresql/data"
+      ],
+      "Entrypoint": ["docker-entrypoint.sh"],
+      "Cmd": ["postgres"],
+      "WorkingDir": "",
+      "User": "",
+      "ExposedPorts": { "5432/tcp": {} },
+      "Volumes": { "/var/lib/postgresql/data": {} },
+      "StopSignal": "SIGINT",
+      "Labels": {}
+    }
+  }
+]

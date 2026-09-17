@@ -1,0 +1,18 @@
+# Existing Quadlet file captured from the host; evidence only.
+[Unit]
+Description=shop database
+
+[Container]
+Image=docker.io/library/postgres:16
+ContainerName=shop-db
+Pod=shop.pod
+Secret=shop_db_password,type=mount,target=db_password,uid=999,gid=999,mode=0400
+Environment=POSTGRES_USER=shop
+Environment=POSTGRES_PASSWORD_FILE=/run/secrets/db_password
+Volume=shop_pgdata:/var/lib/postgresql/data
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

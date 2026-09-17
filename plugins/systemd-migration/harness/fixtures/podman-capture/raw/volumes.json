@@ -1,0 +1,15 @@
+[
+  {
+    "Name": "shop_pgdata",
+    "Driver": "local",
+    "Mountpoint": "/var/lib/containers/storage/volumes/shop_pgdata/_data",
+    "CreatedAt": "2026-09-01T11:59:30Z",
+    "Labels": { "io.podman.compose.project": "shop" },
+    "Scope": "local",
+    "Options": {},
+    "MountCount": 1,
+    "NeedsCopyUp": false,
+    "NeedsChown": false,
+    "LockNumber": 3
+  }
+]

@@ -1,0 +1,25 @@
+[
+  {
+    "Id": "3f9c0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f",
+    "Name": "shop",
+    "Created": "2026-09-01T12:00:00Z",
+    "State": "Running",
+    "Hostname": "shop",
+    "Labels": { "io.podman.compose.project": "shop" },
+    "CgroupParent": "machine.slice",
+    "InfraContainerID": "b1e2d3c4f5a6978877665544332211aabbccddeeff00112233445566778899aa",
+    "InfraConfig": {
+      "PortBindings": { "8080/tcp": [{ "HostIp": "", "HostPort": "8080" }] },
+      "HostNetwork": false,
+      "Networks": ["shop_net"],
+      "NetworkOptions": null
+    },
+    "SharedNamespaces": ["ipc", "net", "uts"],
+    "NumContainers": 3,
+    "Containers": [
+      { "Id": "b1e2d3c4f5a6978877665544332211aabbccddeeff00112233445566778899aa", "Name": "3f9c0a1b2c3d-infra", "State": "running" },
+      { "Id": "c0ffee0000000000000000000000000000000000000000000000000000000001", "Name": "shop-web", "State": "running" },
+      { "Id": "c0ffee0000000000000000000000000000000000000000000000000000000002", "Name": "shop-db", "State": "running" }
+    ]
+  }
+]

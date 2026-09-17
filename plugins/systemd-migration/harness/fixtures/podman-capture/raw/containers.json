@@ -1,0 +1,183 @@
+[
+  {
+    "Id": "b1e2d3c4f5a6978877665544332211aabbccddeeff00112233445566778899aa",
+    "Created": "2026-09-01T12:00:00Z",
+    "Path": "/catatonit",
+    "Args": ["-P"],
+    "State": { "Status": "running", "Running": true, "ExitCode": 0, "Error": "", "StartedAt": "2026-09-01T12:00:01Z" },
+    "Image": "9999999999999999999999999999999999999999999999999999999999999999",
+    "ImageName": "localhost/podman-pause:5.4.1-1746500000",
+    "Name": "3f9c0a1b2c3d-infra",
+    "Pod": "3f9c0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f",
+    "IsInfra": true,
+    "Mounts": [],
+    "Config": {
+      "Hostname": "shop",
+      "User": "",
+      "Env": ["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "container=podman", "HOSTNAME=shop"],
+      "Cmd": null,
+      "Entrypoint": ["/catatonit", "-P"],
+      "Labels": { "io.buildah.version": "1.39.0", "io.podman.compose.project": "shop" },
+      "StopSignal": "SIGTERM",
+      "CreateCommand": ["podman", "pod", "create", "--name", "shop", "--hostname", "shop", "--network", "shop_net", "-p", "8080:8080"]
+    },
+    "HostConfig": {
+      "NetworkMode": "bridge",
+      "PortBindings": { "8080/tcp": [{ "HostIp": "", "HostPort": "8080" }] },
+      "RestartPolicy": { "Name": "", "MaximumRetryCount": 0 },
+      "LogConfig": { "Type": "journald", "Config": null },
+      "Dns": [], "DnsOptions": [], "DnsSearch": [], "ExtraHosts": [],
+      "CapAdd": [], "CapDrop": [],
+      "Privileged": false, "ReadonlyRootfs": false, "Init": false,
+      "Memory": 0, "NanoCpus": 0, "PidsLimit": 0, "MemoryReservation": 0,
+      "Tmpfs": {}, "Ulimits": [], "Devices": [], "SecurityOpt": [], "GroupAdd": [], "CgroupParent": "machine.slice"
+    },
+    "NetworkSettings": {
+      "Ports": { "8080/tcp": [{ "HostIp": "", "HostPort": "8080" }] },
+      "Networks": {
+        "shop_net": { "NetworkID": "4444444444444444444444444444444444444444444444444444444444444444", "IPAddress": "10.89.0.10", "Gateway": "10.89.0.1", "Aliases": ["shop", "web", "3f9c0a1b2c3d"] }
+      }
+    }
+  },
+  {
+    "Id": "c0ffee0000000000000000000000000000000000000000000000000000000001",
+    "Created": "2026-09-01T12:00:02Z",
+    "Path": "/usr/bin/shop",
+    "Args": ["serve", "--port", "8080"],
+    "State": { "Status": "running", "Running": true, "ExitCode": 0, "Error": "", "StartedAt": "2026-09-01T12:00:03Z", "Health": { "Status": "healthy", "FailingStreak": 0 } },
+    "Image": "1111111111111111111111111111111111111111111111111111111111111111",
+    "ImageName": "registry.example.com/acme/shop:2026.09",
+    "Name": "shop-web",
+    "Pod": "3f9c0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f",
+    "IsInfra": false,
+    "Mounts": [
+      { "Type": "bind", "Source": "/srv/shop/static", "Destination": "/srv/shop/static", "Driver": "", "Mode": "ro", "Options": ["rbind"], "RW": false, "Propagation": "rprivate" }
+    ],
+    "Config": {
+      "Hostname": "shop",
+      "User": "1000:1000",
+      "Tty": false,
+      "Env": [
+        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "SHOP_DB_URL=postgres://shop@shop-db:5432/shop",
+        "SHOP_SESSION_SECRET=fixture-placeholder-not-a-secret",
+        "LOG_LEVEL=info",
+        "container=podman",
+        "HOSTNAME=shop"
+      ],
+      "Cmd": ["serve", "--port", "8080"],
+      "Entrypoint": ["/usr/bin/shop"],
+      "WorkingDir": "/srv/shop",
+      "Labels": {
+        "PODMAN_SYSTEMD_UNIT": "shop-web.service",
+        "app.tier": "web",
+        "io.podman.compose.project": "shop",
+        "org.opencontainers.image.version": "2026.09"
+      },
+      "StopSignal": "SIGTERM",
+      "StopTimeout": 30,
+      "Healthcheck": {
+        "Test": ["CMD-SHELL", "curl -fsS http://localhost:8080/healthz || exit 1"],
+        "Interval": 15000000000,
+        "Timeout": 5000000000,
+        "Retries": 3,
+        "StartPeriod": 20000000000
+      },
+      "ExposedPorts": { "8080/tcp": {} },
+      "CreateCommand": [
+        "podman", "run", "-d", "--name", "shop-web", "--pod", "shop",
+        "--user", "1000:1000", "--read-only", "--init",
+        "--memory", "512m", "--cpus", "1.5", "--pids-limit", "512",
+        "--ulimit", "nofile=65536:65536", "--sysctl", "net.core.somaxconn=1024",
+        "--tmpfs", "/tmp:rw,size=64m,mode=1777",
+        "-v", "/srv/shop/static:/srv/shop/static:ro",
+        "--add-host", "legacy.internal:10.0.9.9",
+        "-e", "SHOP_DB_URL=postgres://shop@shop-db:5432/shop",
+        "-e", "SHOP_SESSION_SECRET=fixture-placeholder-not-a-secret",
+        "-e", "LOG_LEVEL=info",
+        "--restart", "on-failure:5",
+        "registry.example.com/acme/shop:2026.09", "serve", "--port", "8080"
+      ]
+    },
+    "HostConfig": {
+      "NetworkMode": "container:b1e2d3c4f5a6978877665544332211aabbccddeeff00112233445566778899aa",
+      "PortBindings": {},
+      "RestartPolicy": { "Name": "on-failure", "MaximumRetryCount": 5 },
+      "LogConfig": { "Type": "journald", "Config": null },
+      "Dns": [], "DnsOptions": [], "DnsSearch": [],
+      "ExtraHosts": ["legacy.internal:10.0.9.9"],
+      "CapAdd": [], "CapDrop": ["CAP_NET_RAW"],
+      "Privileged": false, "ReadonlyRootfs": true, "Init": true,
+      "Memory": 536870912, "NanoCpus": 1500000000, "PidsLimit": 512, "MemoryReservation": 134217728,
+      "CpuQuota": 0, "CpuPeriod": 0, "CpuShares": 0,
+      "Tmpfs": { "/tmp": "rw,size=64m,mode=1777" },
+      "Ulimits": [{ "Name": "RLIMIT_NOFILE", "Soft": 65536, "Hard": 65536 }],
+      "Devices": [], "SecurityOpt": [], "GroupAdd": [], "CgroupParent": "machine.slice", "UsernsMode": "", "IpcMode": "", "PidMode": ""
+    },
+    "NetworkSettings": { "Ports": {}, "Networks": {} }
+  },
+  {
+    "Id": "c0ffee0000000000000000000000000000000000000000000000000000000002",
+    "Created": "2026-09-01T12:00:02Z",
+    "Path": "docker-entrypoint.sh",
+    "Args": ["postgres"],
+    "State": { "Status": "running", "Running": true, "ExitCode": 0, "Error": "", "StartedAt": "2026-09-01T12:00:03Z" },
+    "Image": "2222222222222222222222222222222222222222222222222222222222222222",
+    "ImageName": "docker.io/library/postgres:16",
+    "Name": "shop-db",
+    "Pod": "3f9c0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f",
+    "IsInfra": false,
+    "Mounts": [
+      { "Type": "volume", "Name": "shop_pgdata", "Source": "/var/lib/containers/storage/volumes/shop_pgdata/_data", "Destination": "/var/lib/postgresql/data", "Driver": "local", "Mode": "", "Options": ["nosuid", "nodev", "nobind"], "RW": true, "Propagation": "rprivate" }
+    ],
+    "Config": {
+      "Hostname": "shop",
+      "User": "",
+      "Tty": false,
+      "Env": [
+        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/lib/postgresql/16/bin",
+        "GOSU_VERSION=1.17",
+        "LANG=en_US.utf8",
+        "PG_MAJOR=16",
+        "PGDATA=/var/lib/postgresql/data",
+        "POSTGRES_USER=shop",
+        "POSTGRES_DB=shop",
+        "POSTGRES_PASSWORD_FILE=/run/secrets/db_password",
+        "container=podman",
+        "HOSTNAME=shop"
+      ],
+      "Cmd": ["postgres"],
+      "Entrypoint": ["docker-entrypoint.sh"],
+      "WorkingDir": "",
+      "Labels": { "PODMAN_SYSTEMD_UNIT": "shop-db.service", "io.podman.compose.project": "shop" },
+      "StopSignal": "SIGINT",
+      "StopTimeout": 60,
+      "Healthcheck": { "Test": ["CMD", "pg_isready", "-U", "shop"], "Interval": 10000000000, "Timeout": 5000000000, "Retries": 5, "StartPeriod": 0 },
+      "ExposedPorts": { "5432/tcp": {} },
+      "CreateCommand": [
+        "podman", "run", "-d", "--name", "shop-db", "--pod", "shop",
+        "--secret", "shop_db_password,type=mount,target=db_password,uid=999,gid=999,mode=0400",
+        "-e", "POSTGRES_USER=shop", "-e", "POSTGRES_DB=shop", "-e", "POSTGRES_PASSWORD_FILE=/run/secrets/db_password",
+        "-v", "shop_pgdata:/var/lib/postgresql/data",
+        "--memory", "1g", "--stop-timeout", "60", "--stop-signal", "SIGINT",
+        "--restart", "always",
+        "docker.io/library/postgres:16"
+      ]
+    },
+    "HostConfig": {
+      "NetworkMode": "container:b1e2d3c4f5a6978877665544332211aabbccddeeff00112233445566778899aa",
+      "PortBindings": {},
+      "RestartPolicy": { "Name": "always", "MaximumRetryCount": 0 },
+      "LogConfig": { "Type": "journald", "Config": null },
+      "Dns": [], "DnsOptions": [], "DnsSearch": [], "ExtraHosts": [],
+      "CapAdd": [], "CapDrop": [],
+      "Privileged": false, "ReadonlyRootfs": false, "Init": false,
+      "Memory": 1073741824, "NanoCpus": 0, "PidsLimit": 2048, "MemoryReservation": 0,
+      "CpuQuota": 0, "CpuPeriod": 0, "CpuShares": 0,
+      "Tmpfs": {},
+      "Ulimits": [],
+      "Devices": [], "SecurityOpt": [], "GroupAdd": [], "CgroupParent": "machine.slice", "UsernsMode": "", "IpcMode": "", "PidMode": ""
+    },
+    "NetworkSettings": { "Ports": {}, "Networks": {} }
+  }
+]

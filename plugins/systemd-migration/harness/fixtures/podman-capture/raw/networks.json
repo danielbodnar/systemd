@@ -1,0 +1,15 @@
+[
+  {
+    "name": "shop_net",
+    "id": "4444444444444444444444444444444444444444444444444444444444444444",
+    "driver": "bridge",
+    "network_interface": "podman1",
+    "created": "2026-09-01T11:59:00Z",
+    "subnets": [{ "subnet": "10.89.0.0/24", "gateway": "10.89.0.1" }],
+    "ipv6_enabled": false,
+    "internal": false,
+    "dns_enabled": true,
+    "ipam_options": { "driver": "host-local" },
+    "labels": { "io.podman.compose.project": "shop" }
+  }
+]

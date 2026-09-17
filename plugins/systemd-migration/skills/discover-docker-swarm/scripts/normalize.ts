@@ -48,11 +48,11 @@ function readJsonl(dir: string, name: string): Json[] {
     .map((l) => JSON.parse(l));
 }
 
-function labelsOf(obj: unknown): Record<string, string> {
+export function labelsOf(obj: unknown): Record<string, string> {
   return obj && typeof obj === "object" ? { ...(obj as Record<string, string>) } : {};
 }
 
-function envToMap(list: string[] | undefined, keepValues: boolean): { env: Record<string, string>; redacted: string[] } {
+export function envToMap(list: string[] | undefined, keepValues: boolean): { env: Record<string, string>; redacted: string[] } {
   const env: Record<string, string> = {};
   const redacted: string[] = [];
   for (const entry of list ?? []) {
@@ -108,7 +108,7 @@ function fileRefs(list: Json[] | undefined, idKey: string, nameKey: string): Fil
   }));
 }
 
-function healthcheck(h: Json | undefined): Healthcheck | null {
+export function healthcheck(h: Json | undefined): Healthcheck | null {
   if (!h || !Array.isArray(h.Test) || h.Test.length === 0) return null;
   if (h.Test[0] === "NONE") return null;
   return {
@@ -277,7 +277,7 @@ function services(raw: Json[], taskRows: Json[], nodeList: Node[], keepEnv: bool
   });
 }
 
-function usedBy(svcs: Service[], pick: (s: Service) => string[]): Map<string, string[]> {
+export function usedBy(svcs: Service[], pick: (s: Service) => string[]): Map<string, string[]> {
   const m = new Map<string, string[]>();
   for (const s of svcs) for (const key of pick(s)) m.set(key, [...(m.get(key) ?? []), s.name]);
   return m;
@@ -350,7 +350,7 @@ function configs(raw: Json[], svcs: Service[]): Config[] {
 }
 
 /** Image configuration for the references the services use, from docker image inspect on the capturing node. */
-function images(raw: Json[], svcs: Service[], keepEnv: boolean, warnings: string[]): ImageConfig[] {
+export function images(raw: Json[], svcs: Service[], keepEnv: boolean, warnings: string[]): ImageConfig[] {
   const out: ImageConfig[] = [];
   const refs = new Map<string, string[]>();
   for (const s of svcs) refs.set(s.image, [...(refs.get(s.image) ?? []), s.name]);
@@ -384,7 +384,7 @@ function images(raw: Json[], svcs: Service[], keepEnv: boolean, warnings: string
   return out;
 }
 
-function stacks(svcs: Service[]): Stack[] {
+export function stacks(svcs: Service[]): Stack[] {
   const m = new Map<string, string[]>();
   for (const s of svcs) if (s.stack) m.set(s.stack, [...(m.get(s.stack) ?? []), s.name]);
   return [...m.entries()].sort().map(([name, services]) => ({ name, services: services.sort() }));

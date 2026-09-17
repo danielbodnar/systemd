@@ -14,7 +14,9 @@ import { type Surface, buildSurface } from "../../skills/migration-planner/scrip
 const contract = resolve(import.meta.dir, "../../contract");
 const tree = resolve(import.meta.dir, "../../../..");
 const surface = JSON.parse(readFileSync(resolve(contract, "surface.json"), "utf8")) as Surface;
-const coverage = JSON.parse(readFileSync(resolve(contract, "coverage.json"), "utf8")) as { skills: Record<string, string[]>; not_applicable: Record<string, string[]> };
+const coverage = JSON.parse(readFileSync(resolve(contract, "coverage.json"), "utf8")) as { skills: Record<string, string[]>; not_applicable: Record<string, string[]>; adapters?: string[] };
+/** Components that are adapter targets for another runtime (Quadlet is Podman's interface); they may claim no page. */
+const adapters = new Set(coverage.adapters ?? []);
 
 /** Page name or alias to the canonical page name. */
 const canonical = new Map<string, string>();
@@ -66,6 +68,7 @@ describe("systemd surface coverage", () => {
     // Report so the number is visible in the test log.
     console.log(`surface: ${total} pages; components ${byComponent.size}, skills ${bySkill.size}, not applicable ${excluded.size} (${Math.round((implemented / (total - excluded.size)) * 100)}% of the applicable surface)`);
     expect(implemented).toBeGreaterThan(excluded.size / 2);
-    for (const c of COMPONENTS) expect(c.covers.length, c.id).toBeGreaterThan(0);
+    for (const id of adapters) expect(COMPONENTS.some((c) => c.id === id), `adapter ${id} is registered`).toBe(true);
+    for (const c of COMPONENTS) if (!adapters.has(c.id)) expect(c.covers.length, c.id).toBeGreaterThan(0);
   });
 });
