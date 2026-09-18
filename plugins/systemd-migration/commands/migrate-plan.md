@@ -1,0 +1,13 @@
+---
+name: migrate-plan
+description: Draft plan.yaml from the inventory and the host probes, walk every decision with the user (target form per service, address ranges, overlay transports, published ports, discovery, secrets, data moves), and write MIGRATION-PLAN.md with the cutover runbooks.
+---
+
+Build and review the plan. Nothing is rendered until every decision in `plan.yaml` is approved.
+
+1. Confirm `inventory.json` exists in the migration directory (`${user_config.inventory_dir}` or `.systemd-migration/`); run `/migrate-discover` first if it does not. Use `<dir>/hosts/` when it exists; without it the plan targets the inventory's own nodes with unknown capabilities, which is enough for an estimate and not for a migration, so say so.
+2. Draft: `bun "${CLAUDE_PLUGIN_ROOT}/scripts/plan.ts" <dir>/inventory.json --hosts <dir>/hosts -o <dir>/plan.yaml`. An existing plan keeps its chosen values; the command reports what it dropped.
+3. Review the unresolved decisions first: `bun "${CLAUDE_PLUGIN_ROOT}/scripts/review.ts" <dir>/plan.yaml --json` and present each decision with no default to the user one component at a time: the question, the options with their consequences (and which hosts cannot satisfy an option), the evidence, and your recommendation with its reason. The user's constraints are: $ARGUMENTS. Record each answer with `bun "${CLAUDE_PLUGIN_ROOT}/scripts/review.ts" <dir>/plan.yaml --set <id>=<value> --reason "<the user's reason>"`; the id and value come from the plan, the reason is the user's words. Never set a value the user did not give.
+4. Then the defaulted decisions: present them grouped by component as a table (id, default, one-line consequence) and ask whether to accept the group as is or change entries. Accept a group with `review.ts <plan> --accept-defaults --component <id>` and change single entries with `--set`. Push back when an answer creates a problem the evidence shows (an encrypted overlay routed in plaintext, a single-writer database placed on two hosts, a service made a machine on a host without systemd-nspawn); state the concern in one or two sentences and offer the alternative, then record what the user chooses.
+5. Finish when `review.ts <plan> --status` reports 0 unresolved and 0 not yet approved. Then build the translation map with `bun "${CLAUDE_PLUGIN_ROOT}/skills/migration-planner/scripts/plan-map.ts" <dir>/inventory.json -o <dir>` and invoke the migration-planner agent to write `<dir>/MIGRATION-PLAN.md` (cutover order, runbooks, rollback, risks) from the inventory, the plan, and the map.
+6. Summarize: the decisions taken without a default, the cutover order, the open risks, and the next command (`/migrate-render`).

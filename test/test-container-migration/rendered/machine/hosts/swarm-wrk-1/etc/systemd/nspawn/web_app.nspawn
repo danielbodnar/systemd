@@ -1,0 +1,25 @@
+# Rendered by systemd-migration from service web_app (stack web) as a machine
+
+[Network]
+Zone=web_frontend
+Port=tcp:8080:8080
+
+[Exec]
+Parameters=/usr/bin/app serve --port 8080
+PrivateUsers=pick
+WorkingDirectory=/srv/app
+User=1000
+Environment=APP_HOME=/srv/app
+Environment=DATABASE_URL=postgres://app@data_postgres:5432/app
+Environment=LOG_LEVEL=info
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin/bin
+Environment=APP_SECRET_KEY_FILE=/run/host/credentials/web_app-app-secret-key
+DropCapability=all
+NoNewPrivileges=yes
+LimitNOFILE=65536
+LinkJournal=try-guest
+
+[Files]
+ReadOnly=yes
+TemporaryFileSystem=/tmp:size=67108864
+Bind=/var/lib/web/web_cache:/cache:idmap

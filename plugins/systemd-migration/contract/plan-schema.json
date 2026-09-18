@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/danielbodnar/systemd/plugins/systemd-migration/contract/plan-schema.json",
+  "title": "systemd-migration plan",
+  "description": "plan.yaml: the decisions a migration needs, with their options, evidence, defaults, and the values the user chose, plus the target hosts' capabilities. Written by scripts/plan.ts, edited by the user or scripts/review.ts, read by scripts/render.ts.",
+  "type": "object",
+  "required": ["version", "generated_at", "generated_by", "inventory", "hosts", "decisions"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "const": 1 },
+    "generated_at": { "type": "string" },
+    "generated_by": { "type": "string" },
+    "inventory": {
+      "type": "object",
+      "required": ["captured_at", "services", "networks", "nodes"],
+      "properties": {
+        "captured_at": { "type": "string" },
+        "services": { "type": "integer" },
+        "networks": { "type": "integer" },
+        "nodes": { "type": "integer" }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "decisions": { "type": "integer" },
+        "unresolved": { "type": "integer" },
+        "defaulted": { "type": "integer" }
+      }
+    },
+    "hosts": {
+      "type": "object",
+      "additionalProperties": { "type": ["object", "null"], "description": "A host object (see $defs/host, checked by plan.ts) or null when the host was not probed." }
+    },
+    "decisions": { "type": "array", "items": { "$ref": "#/$defs/decision" } }
+  },
+  "$defs": {
+    "host": {
+      "type": "object",
+      "required": ["hostname", "systemd", "kernel", "arch", "cgroup_v2", "overlayfs_fsconfig", "daemons", "tools"],
+      "properties": {
+        "hostname": { "type": "string" },
+        "probed_at": { "type": "string" },
+        "systemd": {
+          "type": "object",
+          "required": ["version"],
+          "properties": { "version": { "type": "integer" }, "features": { "type": "array", "items": { "type": "string" } } }
+        },
+        "kernel": {
+          "type": "object",
+          "required": ["release", "major", "minor"],
+          "properties": { "release": { "type": "string" }, "major": { "type": "integer" }, "minor": { "type": "integer" } }
+        },
+        "arch": { "type": "string" },
+        "os": { "type": "object" },
+        "cgroup_v2": { "type": "boolean" },
+        "overlayfs_fsconfig": { "type": ["boolean", "null"] },
+        "daemons": { "type": "object", "additionalProperties": { "type": "boolean" } },
+        "tools": { "type": "object", "additionalProperties": { "type": "boolean" } },
+        "image_dirs": { "type": "array", "items": { "type": "string" } },
+        "addresses": { "type": "array", "items": { "type": "string" } },
+        "notes": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "requirements": {
+      "type": "object",
+      "properties": {
+        "systemd": { "type": "integer" },
+        "kernel": { "type": "string" },
+        "daemons": { "type": "array", "items": { "type": "string" } },
+        "tools": { "type": "array", "items": { "type": "string" } },
+        "features": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "required": ["id", "component", "kind", "subject", "question"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*(\\.[A-Za-z0-9._@:-]+)+$" },
+        "component": { "type": "string" },
+        "kind": { "enum": ["choice", "value"] },
+        "subject": {
+          "type": "object",
+          "required": ["kind", "name"],
+          "properties": {
+            "kind": { "enum": ["estate", "host", "stack", "service", "network", "volume", "secret", "config", "port", "image"] },
+            "name": { "type": "string" }
+          }
+        },
+        "question": { "type": "string" },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["value", "label"],
+            "properties": {
+              "value": { "type": "string" },
+              "label": { "type": "string" },
+              "consequence": { "type": "string" },
+              "requires": { "$ref": "#/$defs/requirements" }
+            }
+          }
+        },
+        "format": { "enum": ["cidr", "ipv4", "hostname", "hosts", "path", "name", "port", "text", "list"] },
+        "default": { "type": ["string", "null"] },
+        "chosen": { "type": ["string", "null"] },
+        "reason": { "type": "string" },
+        "evidence": { "type": "array", "items": { "type": "string" } },
+        "hosts": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

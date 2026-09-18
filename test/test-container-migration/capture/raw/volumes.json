@@ -1,0 +1,36 @@
+[
+  {
+    "Name": "web_cache",
+    "Driver": "local",
+    "Scope": "local",
+    "Mountpoint": "/var/lib/docker/volumes/web_cache/_data",
+    "Options": null,
+    "Labels": {
+      "com.docker.stack.namespace": "web"
+    }
+  },
+  {
+    "Name": "data_pgdata",
+    "Driver": "local",
+    "Scope": "local",
+    "Mountpoint": "/var/lib/docker/volumes/data_pgdata/_data",
+    "Options": null,
+    "Labels": {
+      "com.docker.stack.namespace": "data"
+    }
+  },
+  {
+    "Name": "data_backups",
+    "Driver": "local",
+    "Scope": "local",
+    "Mountpoint": "/var/lib/docker/volumes/data_backups/_data",
+    "Options": {
+      "type": "nfs",
+      "o": "addr=10.0.0.50,rw,nfsvers=4",
+      "device": ":/exports/backups"
+    },
+    "Labels": {
+      "com.docker.stack.namespace": "data"
+    }
+  }
+]

@@ -1,0 +1,8 @@
+# Rendered by systemd-service: groups the units of stack web on swarm-mgr-1
+
+[Unit]
+Description=stack web
+Wants=web_proxy.service
+
+[Install]
+WantedBy=multi-user.target

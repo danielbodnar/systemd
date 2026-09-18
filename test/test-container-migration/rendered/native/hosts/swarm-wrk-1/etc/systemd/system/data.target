@@ -1,0 +1,10 @@
+# Rendered by systemd-service: groups the units of stack data on swarm-wrk-1
+
+[Unit]
+Description=stack data
+Wants=data_exporter.service
+Wants=data_postgres.service
+Wants=var-lib-data-data_backups.mount
+
+[Install]
+WantedBy=multi-user.target

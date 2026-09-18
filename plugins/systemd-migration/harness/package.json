@@ -1,0 +1,34 @@
+{
+  "name": "swarm-agent",
+  "version": "0.1.0",
+  "description": "Managed Agents harness for the systemd-migration plugin: config-as-code applied with the ant CLI, a self-hosted worker for production hosts, and an operator CLI that drives migration sessions with an approval policy.",
+  "type": "module",
+  "license": "LGPL-2.1-or-later",
+  "private": true,
+  "bin": {
+    "swarm-agent": "./src/cli.ts"
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "bun test",
+    "lint": "cd .. && harness/node_modules/.bin/oxlint harness/src harness/test contract scripts skills/*/scripts",
+    "cli": "bun run src/cli.ts"
+  },
+  "engines": {
+    "bun": ">=1.3"
+  },
+  "overrides": {
+    "fast-sha256": "file:./vendor/fast-sha256"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.126.0",
+    "fast-sha256": "file:./vendor/fast-sha256",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.11",
+    "oxlint": "1.62.0",
+    "typescript": "^5.9.0"
+  }
+}

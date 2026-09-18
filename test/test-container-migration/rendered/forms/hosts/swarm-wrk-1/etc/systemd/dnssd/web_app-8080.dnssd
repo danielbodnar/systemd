@@ -1,0 +1,7 @@
+# Rendered by systemd-migration: announces web_app port 8080/tcp on swarm-wrk-1
+
+[Service]
+Name=web_app on %H
+Type=_app._tcp
+Port=8080
+TxtText=stack=web service=web_app

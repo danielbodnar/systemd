@@ -1,0 +1,1483 @@
+# systemd-migration plan. Every entry under `decisions` is a question the
+# planner could not answer from the inventory alone. Set `chosen` (and, for a
+# `value` decision, any well-formed value the `format` allows) or run
+# review.ts to walk the unresolved ones. `default` is the planner's
+# suggestion; render.ts accepts defaults only with --accept-defaults.
+version: 1
+generated_at: 2026-09-01T12:00:00Z
+generated_by: systemd-migration plan.ts
+inventory: 
+  captured_at: 2026-09-01T12:00:00Z
+  services: 4
+  networks: 4
+  nodes: 2
+summary: 
+  decisions: 62
+  unresolved: 0
+  defaulted: 0
+hosts: 
+  {}
+decisions: 
+  - id: placement.scale_out.estate
+    component: placement
+    kind: choice
+    subject: 
+      kind: estate
+      name: estate
+    question: "When a replicated service wants more replicas than there are eligible hosts, render numbered instances on the same host?"
+    options: 
+      - value: "no"
+        label: one instance per host
+        consequence: replicas beyond the eligible hosts are dropped and noted; capacity comes from more hosts
+      - value: "yes"
+        label: scale out on a host
+        consequence: "numbered units (name-1, name-2) with offset published ports on one host, never more per host than the source's max_replicas_per_node"
+    default: "no"
+    chosen: "no"
+    reason: "accepted the planner's default"
+  - id: placement.hosts.data_exporter
+    component: placement
+    kind: value
+    subject: 
+      kind: service
+      name: data_exporter
+    question: "Which target hosts run data_exporter (mode replicated, 1 replicas)? List a host once per instance."
+    format: hosts
+    evidence: 
+      - "services[data_exporter].mode"
+      - "services[data_exporter].placement"
+      - "services[data_exporter].tasks[node=swarm-wrk-1]"
+    default: swarm-wrk-1
+    chosen: swarm-wrk-1
+    reason: "accepted the planner's default"
+  - id: placement.hosts.data_postgres
+    component: placement
+    kind: value
+    subject: 
+      kind: service
+      name: data_postgres
+    question: "Which target hosts run data_postgres (mode replicated, 1 replicas)? List a host once per instance."
+    format: hosts
+    evidence: 
+      - "services[data_postgres].mode"
+      - "services[data_postgres].placement"
+      - "services[data_postgres].tasks[node=swarm-wrk-1]"
+    default: swarm-wrk-1
+    chosen: swarm-wrk-1
+    reason: "accepted the planner's default"
+  - id: placement.hosts.web_app
+    component: placement
+    kind: value
+    subject: 
+      kind: service
+      name: web_app
+    question: "Which target hosts run web_app (mode replicated, 2 replicas)? List a host once per instance."
+    format: hosts
+    evidence: 
+      - "services[web_app].mode"
+      - "services[web_app].placement"
+      - "services[web_app].tasks[node=swarm-wrk-1]"
+      - "web_app: wanted 2 replicas but rendered 1; max_replicas_per_node 1 over 1 eligible host(s) places at most 1, add hosts for the rest"
+    default: swarm-wrk-1
+    chosen: swarm-wrk-1
+    reason: "accepted the planner's default"
+  - id: placement.hosts.web_proxy
+    component: placement
+    kind: value
+    subject: 
+      kind: service
+      name: web_proxy
+    question: Which target hosts run web_proxy (mode global)? List a host once per instance.
+    format: hosts
+    evidence: 
+      - "services[web_proxy].mode"
+      - "services[web_proxy].placement"
+      - "services[web_proxy].tasks[node=swarm-mgr-1]"
+    default: swarm-mgr-1
+    chosen: swarm-mgr-1
+    reason: "accepted the planner's default"
+  - id: form.service.data_exporter
+    component: form
+    kind: choice
+    subject: 
+      kind: service
+      name: data_exporter
+    question: How does data_exporter run on systemd?
+    options: 
+      - value: service
+        label: plain service
+        consequence: "a .service unit whose root is the image; shares the host's network namespace"
+      - value: machine
+        label: machine (systemd-nspawn)
+        consequence: "a .nspawn file and systemd-nspawn@.service; own PID and network namespace, an address on a bridge"
+        requires: 
+          &requires
+          tools: 
+            - systemd-nspawn
+      - value: vm
+        label: virtual machine (systemd-vmspawn)
+        consequence: a bootable DDI run by systemd-vmspawn@.service; separate kernel
+        requires: 
+          &requires1
+          tools: 
+            - systemd-vmspawn
+      - value: portable
+        label: portable service
+        consequence: an image under /var/lib/portables attached with portablectl
+        requires: 
+          &requires2
+          tools: 
+            - portablectl
+      - value: quadlet
+        label: Podman Quadlet container
+        consequence: "a .container file for Podman's generator; Podman stays on the host"
+        requires: 
+          &requires3
+          tools: 
+            - podman
+    evidence: 
+      - "services[data_exporter].image=quay.io/prometheuscommunity/postgres-exporter:v0.15.0"
+    default: service
+    chosen: service
+    reason: "accepted the planner's default"
+  - id: form.service.data_postgres
+    component: form
+    kind: choice
+    subject: 
+      kind: service
+      name: data_postgres
+    question: How does data_postgres run on systemd?
+    options: 
+      - value: service
+        label: plain service
+        consequence: "a .service unit whose root is the image; shares the host's network namespace"
+      - value: machine
+        label: machine (systemd-nspawn)
+        consequence: "a .nspawn file and systemd-nspawn@.service; own PID and network namespace, an address on a bridge"
+        requires: 
+          *requires
+      - value: vm
+        label: virtual machine (systemd-vmspawn)
+        consequence: a bootable DDI run by systemd-vmspawn@.service; separate kernel
+        requires: 
+          *requires1
+      - value: portable
+        label: portable service
+        consequence: an image under /var/lib/portables attached with portablectl
+        requires: 
+          *requires2
+      - value: quadlet
+        label: Podman Quadlet container
+        consequence: "a .container file for Podman's generator; Podman stays on the host"
+        requires: 
+          *requires3
+    evidence: 
+      - "services[data_postgres].image=docker.io/library/postgres:16.4"
+    default: service
+    chosen: service
+    reason: "accepted the planner's default"
+  - id: form.service.web_app
+    component: form
+    kind: choice
+    subject: 
+      kind: service
+      name: web_app
+    question: How does web_app run on systemd?
+    options: 
+      - value: service
+        label: plain service
+        consequence: "a .service unit whose root is the image; shares the host's network namespace"
+      - value: machine
+        label: machine (systemd-nspawn)
+        consequence: "a .nspawn file and systemd-nspawn@.service; own PID and network namespace, an address on a bridge"
+        requires: 
+          *requires
+      - value: vm
+        label: virtual machine (systemd-vmspawn)
+        consequence: a bootable DDI run by systemd-vmspawn@.service; separate kernel
+        requires: 
+          *requires1
+      - value: portable
+        label: portable service
+        consequence: an image under /var/lib/portables attached with portablectl
+        requires: 
+          *requires2
+      - value: quadlet
+        label: Podman Quadlet container
+        consequence: "a .container file for Podman's generator; Podman stays on the host"
+        requires: 
+          *requires3
+    evidence: 
+      - "services[web_app].image=registry.example.com/acme/app:2026.09"
+    default: service
+    chosen: machine
+  - id: form.service.web_proxy
+    component: form
+    kind: choice
+    subject: 
+      kind: service
+      name: web_proxy
+    question: How does web_proxy run on systemd?
+    options: 
+      - value: service
+        label: plain service
+        consequence: "a .service unit whose root is the image; shares the host's network namespace"
+      - value: machine
+        label: machine (systemd-nspawn)
+        consequence: "a .nspawn file and systemd-nspawn@.service; own PID and network namespace, an address on a bridge"
+        requires: 
+          *requires
+      - value: vm
+        label: virtual machine (systemd-vmspawn)
+        consequence: a bootable DDI run by systemd-vmspawn@.service; separate kernel
+        requires: 
+          *requires1
+      - value: portable
+        label: portable service
+        consequence: an image under /var/lib/portables attached with portablectl
+        requires: 
+          *requires2
+      - value: quadlet
+        label: Podman Quadlet container
+        consequence: "a .container file for Podman's generator; Podman stays on the host"
+        requires: 
+          *requires3
+    evidence: 
+      - "services[web_proxy].image=docker.io/library/caddy:2"
+    default: service
+    chosen: service
+    reason: "accepted the planner's default"
+  - id: machined.image_dir.estate
+    component: machined
+    kind: value
+    subject: 
+      kind: estate
+      name: estate
+    question: Where do the pulled images live on the hosts?
+    format: path
+    evidence: 
+      - importctl pull-oci --class=machine writes NAME.mstack under /var/lib/machines
+    default: /var/lib/machines
+    chosen: /var/lib/machines
+    reason: "accepted the planner's default"
+  - id: machined.root_form.swarm-mgr-1
+    component: machined
+    kind: choice
+    subject: 
+      kind: host
+      name: swarm-mgr-1
+    question: How are images mounted on swarm-mgr-1?
+    options: 
+      - value: mstack
+        label: mount stack (RootMStack=)
+        consequence: "the image's layers are mounted as pulled, with a writable layer; needs systemd 260 and overlayfs FSCONFIG_SET_FD (kernel 6.13)"
+        requires: 
+          systemd: 260
+          kernel: "6.13"
+      - value: ddi
+        label: disk image (RootImage=)
+        consequence: "the mount stack is packed into an erofs DDI by make-ddi.sh; read-only root, works on older hosts"
+    evidence: 
+      - "hosts[swarm-mgr-1] not probed; run discover-systemd-hosts"
+    hosts: 
+      - swarm-mgr-1
+    default: mstack
+    chosen: mstack
+    reason: "accepted the planner's default"
+  - id: machined.root_form.swarm-wrk-1
+    component: machined
+    kind: choice
+    subject: 
+      kind: host
+      name: swarm-wrk-1
+    question: How are images mounted on swarm-wrk-1?
+    options: 
+      - value: mstack
+        label: mount stack (RootMStack=)
+        consequence: "the image's layers are mounted as pulled, with a writable layer; needs systemd 260 and overlayfs FSCONFIG_SET_FD (kernel 6.13)"
+        requires: 
+          systemd: 260
+          kernel: "6.13"
+      - value: ddi
+        label: disk image (RootImage=)
+        consequence: "the mount stack is packed into an erofs DDI by make-ddi.sh; read-only root, works on older hosts"
+    evidence: 
+      - "hosts[swarm-wrk-1] not probed; run discover-systemd-hosts"
+    hosts: 
+      - swarm-wrk-1
+    default: mstack
+    chosen: mstack
+    reason: "accepted the planner's default"
+  - id: service.healthcheck.web_app
+    component: service
+    kind: choice
+    subject: 
+      kind: service
+      name: web_app
+    question: "The healthcheck of web_app is a shell command (\"curl -fsS http://localhost:8080/healthz || exit 1\"); it will run through /bin/sh -c inside the image's root with the service's privileges. Keep it?"
+    options: 
+      - value: shell
+        label: keep the shell healthcheck
+        consequence: "rendered verbatim into the health service's ExecStart=/bin/sh -c"
+      - value: drop
+        label: no healthcheck
+        consequence: no health timer; systemd restarts the service only when its main process exits
+    evidence: 
+      - "services[web_app].healthcheck.test"
+    default: shell
+    chosen: shell
+    reason: "accepted the planner's default"
+  - id: service.healthcheck.data_postgres
+    component: service
+    kind: choice
+    subject: 
+      kind: service
+      name: data_postgres
+    question: "The healthcheck of data_postgres is a shell command (\"pg_isready -U app\"); it will run through /bin/sh -c inside the image's root with the service's privileges. Keep it?"
+    options: 
+      - value: shell
+        label: keep the shell healthcheck
+        consequence: "rendered verbatim into the health service's ExecStart=/bin/sh -c"
+      - value: drop
+        label: no healthcheck
+        consequence: no health timer; systemd restarts the service only when its main process exits
+    evidence: 
+      - "services[data_postgres].healthcheck.test"
+    default: shell
+    chosen: shell
+    reason: "accepted the planner's default"
+  - id: creds.store.data_postgres_password
+    component: creds
+    kind: choice
+    subject: 
+      kind: secret
+      name: data_postgres_password
+    question: Where does the value of data_postgres_password live on the target hosts?
+    options: 
+      &options
+      - value: credstore.encrypted
+        label: encrypted credential on the host
+        consequence: "systemd-creds encrypt writes /etc/credstore.encrypted/NAME bound to the host's TPM or key; the unit loads it with LoadCredentialEncrypted="
+        requires: 
+          tools: 
+            - systemd-creds
+      - value: credstore
+        label: plain credential file on the host
+        consequence: "/etc/credstore/NAME, mode 0600, loaded with LoadCredential=; no encryption at rest"
+      - value: external
+        label: fetched at start from an external secret manager
+        consequence: the unit loads nothing; a ExecStartPre= or a credential provider you add fetches the value into $CREDENTIALS_DIRECTORY
+    evidence: 
+      - "secrets[data_postgres_password] used by data_postgres, data_exporter"
+    default: credstore.encrypted
+    chosen: credstore.encrypted
+    reason: "accepted the planner's default"
+  - id: creds.store.web_app-app-secret-key
+    component: creds
+    kind: choice
+    subject: 
+      kind: secret
+      name: web_app-app-secret-key
+    question: Where does the value of web_app-app-secret-key live on the target hosts?
+    options: 
+      *options
+    evidence: 
+      - "services[web_app].env.APP_SECRET_KEY was redacted at capture"
+    default: credstore.encrypted
+    chosen: credstore.encrypted
+    reason: "accepted the planner's default"
+  - id: creds.store.web_app_signing_key
+    component: creds
+    kind: choice
+    subject: 
+      kind: secret
+      name: web_app_signing_key
+    question: Where does the value of web_app_signing_key live on the target hosts?
+    options: 
+      *options
+    evidence: 
+      - "secrets[web_app_signing_key] used by web_app"
+    default: credstore.encrypted
+    chosen: credstore.encrypted
+    reason: "accepted the planner's default"
+  - id: resource-control.accounting.estate
+    component: resource-control
+    kind: choice
+    subject: 
+      kind: estate
+      name: estate
+    question: Turn on memory and task accounting on every stack slice?
+    options: 
+      - value: "yes"
+        label: accounting on
+        consequence: MemoryAccounting= and TasksAccounting= on each stack-NAME.slice; systemctl status shows usage per stack
+      - value: "no"
+        label: "leave the manager's default"
+        consequence: DefaultMemoryAccounting= and DefaultTasksAccounting= from system.conf apply
+    default: "yes"
+    chosen: "yes"
+    reason: "accepted the planner's default"
+  - id: storage.state_dir.estate
+    component: storage
+    kind: value
+    subject: 
+      kind: estate
+      name: estate
+    question: Where do local volumes live on the hosts? Each becomes <state_dir>/<stack>/<volume>.
+    format: path
+    default: /var/lib
+    chosen: /var/lib
+    reason: "accepted the planner's default"
+  - id: storage.move.web_cache
+    component: storage
+    kind: choice
+    subject: 
+      kind: volume
+      name: web_cache
+    question: How does the data of volume web_cache (used by web_app) reach the new host?
+    options: 
+      - value: rsync
+        label: copy while stopped
+        consequence: "stop the service on the old host, rsync the volume, start on the new host; the runbook records the window"
+      - value: snapshot
+        label: storage snapshot
+        consequence: "a snapshot of the volume's file system is restored on the new host"
+      - value: shared
+        label: already shared
+        consequence: both sides mount the same storage; only ownership needs checking
+      - value: empty
+        label: start empty
+        consequence: a cache or scratch volume; the directory is created empty
+    evidence: 
+      - "volumes[web_cache].driver=local"
+      - "volumes[web_cache].mountpoint=/var/lib/docker/volumes/web_cache/_data"
+    default: null
+    chosen: empty
+  - id: storage.move.data_pgdata
+    component: storage
+    kind: choice
+    subject: 
+      kind: volume
+      name: data_pgdata
+    question: How does the data of volume data_pgdata (used by data_postgres) reach the new host?
+    options: 
+      - value: rsync
+        label: copy while stopped
+        consequence: "stop the service on the old host, rsync the volume, start on the new host; the runbook records the window"
+      - value: snapshot
+        label: storage snapshot
+        consequence: "a snapshot of the volume's file system is restored on the new host"
+      - value: shared
+        label: already shared
+        consequence: both sides mount the same storage; only ownership needs checking
+      - value: empty
+        label: start empty
+        consequence: a cache or scratch volume; the directory is created empty
+    evidence: 
+      - "volumes[data_pgdata].driver=local"
+      - "volumes[data_pgdata].mountpoint=/var/lib/docker/volumes/data_pgdata/_data"
+    default: null
+    chosen: rsync
+  - id: networkd.subnet.data_backend
+    component: networkd
+    kind: value
+    subject: 
+      kind: network
+      name: data_backend
+    question: Which address range does network data_backend use on the systemd hosts? The source used 10.10.2.0/24.
+    format: cidr
+    evidence: 
+      - "networks[data_backend].driver=overlay"
+      - "networks[data_backend].ipam.config=[{\"subnet\":\"10.10.2.0/24\",\"gateway\":\"10.10.2.1\"}]"
+      - "members: data_postgres, data_exporter"
+      - "hosts: swarm-wrk-1"
+    hosts: 
+      &hosts
+      - swarm-wrk-1
+    default: 10.10.2.0/24
+    chosen: 10.10.2.0/24
+    reason: "accepted the planner's default"
+  - id: networkd.domain.data_backend
+    component: networkd
+    kind: value
+    subject: 
+      kind: network
+      name: data_backend
+    question: Under which local domain does the host resolve the DHCP leases of the machines on data_backend (LocalLeaseDomain= of the zone bridge)?
+    format: name
+    evidence: 
+      - "networks[data_backend].name=data_backend"
+      - the shipped 80-container-vz.network uses _dhcp
+    hosts: 
+      *hosts
+    default: _dhcp
+    chosen: _dhcp
+    reason: "accepted the planner's default"
+  - id: networkd.subnet.data_monitoring
+    component: networkd
+    kind: value
+    subject: 
+      kind: network
+      name: data_monitoring
+    question: Which range of the macvlan segment of data_monitoring do the systemd hosts and their machines take addresses from? The source allocated from 192.168.50.128/25 inside 192.168.50.0/24.
+    format: cidr
+    evidence: 
+      - "networks[data_monitoring].driver=macvlan"
+      - "networks[data_monitoring].ipam.config=[{\"subnet\":\"192.168.50.0/24\",\"gateway\":\"192.168.50.1\",\"ip_range\":\"192.168.50.128/25\"}]"
+      - "members: data_exporter"
+      - "hosts: swarm-wrk-1"
+    hosts: 
+      &hosts1
+      - swarm-wrk-1
+    default: 192.168.50.128/25
+    chosen: 192.168.50.128/25
+    reason: "accepted the planner's default"
+  - id: networkd.domain.data_monitoring
+    component: networkd
+    kind: value
+    subject: 
+      kind: network
+      name: data_monitoring
+    question: Under which local domain does the host resolve the DHCP leases of the machines on data_monitoring (LocalLeaseDomain= of the zone bridge)?
+    format: name
+    evidence: 
+      - "networks[data_monitoring].name=data_monitoring"
+      - the shipped 80-container-vz.network uses _dhcp
+    hosts: 
+      *hosts1
+    default: _dhcp
+    chosen: _dhcp
+    reason: "accepted the planner's default"
+  - id: networkd.parent.data_monitoring
+    component: networkd
+    kind: value
+    subject: 
+      kind: network
+      name: data_monitoring
+    question: Which host link do the macvlan interfaces of data_monitoring attach to on the systemd hosts? The source used eth1.
+    format: name
+    evidence: 
+      - "networks[data_monitoring].driver=macvlan"
+      - "networks[data_monitoring].options.parent=eth1"
+      - "the default is the source's parent link; confirm it exists on swarm-wrk-1"
+    hosts: 
+      *hosts1
+    default: eth1
+    chosen: eth1
+    reason: "accepted the planner's default"
+  - id: networkd.subnet.web_frontend
+    component: networkd
+    kind: value
+    subject: 
+      kind: network
+      name: web_frontend
+    question: Which address range does network web_frontend use on the systemd hosts? The source used 10.10.1.0/24.
+    format: cidr
+    evidence: 
+      - "networks[web_frontend].driver=overlay"
+      - "networks[web_frontend].ipam.config=[{\"subnet\":\"10.10.1.0/24\",\"gateway\":\"10.10.1.1\"}]"
+      - "members: web_app, web_proxy"
+      - "hosts: swarm-mgr-1, swarm-wrk-1"
+    hosts: 
+      &hosts2
+      - swarm-mgr-1
+      - swarm-wrk-1
+    default: 10.10.1.0/24
+    chosen: 10.10.1.0/24
+    reason: "accepted the planner's default"
+  - id: networkd.domain.web_frontend
+    component: networkd
+    kind: value
+    subject: 
+      kind: network
+      name: web_frontend
+    question: Under which local domain does the host resolve the DHCP leases of the machines on web_frontend (LocalLeaseDomain= of the zone bridge)?
+    format: name
+    evidence: 
+      - "networks[web_frontend].name=web_frontend"
+      - the shipped 80-container-vz.network uses _dhcp
+    hosts: 
+      *hosts2
+    default: _dhcp
+    chosen: _dhcp
+    reason: "accepted the planner's default"
+  - id: networkd.transport.web_frontend
+    component: networkd
+    kind: choice
+    subject: 
+      kind: network
+      name: web_frontend
+    question: "Network web_frontend spans swarm-mgr-1, swarm-wrk-1 and was encrypted. What carries it between the hosts?"
+    options: 
+      - value: vxlan-wireguard
+        label: VXLAN over a WireGuard mesh
+        consequence: "a wg netdev per host with keys as credentials, the VXLAN rides inside it; encrypted like the source"
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 243
+      - value: vxlan
+        label: VXLAN over the underlay
+        consequence: "plain VXLAN between the hosts' addresses; unencrypted"
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 243
+      - value: geneve
+        label: GENEVE over the underlay
+        consequence: "one geneve device per peer, each enslaved into the zone bridge; the same L2 domain as VXLAN with a header that carries options; unencrypted"
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 234
+      - value: gretap
+        label: GRE tap (L2 GRE over IPv4)
+        consequence: "one gretap device per peer enslaved into the zone bridge; frames are carried in GRE with the decided key, unencrypted, and the site's network must pass IP protocol 47"
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 231
+      - value: ip6gretap
+        label: GRE tap over IPv6
+        consequence: the same L2 GRE with IPv6 endpoints; every host needs an IPv6 address the others reach it at
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 231
+      - value: erspan
+        label: ERSPAN (mirrored frames in GRE)
+        consequence: "one erspan device per peer enslaved into the zone bridge; ERSPAN encapsulates mirrored traffic, so it suits a monitoring zone and not a zone whose machines answer"
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 252
+      - value: l2tp
+        label: L2TPv3 pseudowire
+        consequence: "one l2tp tunnel per peer with a session interface enslaved into the zone bridge; L2 over UDP, unencrypted, and the decided UDP port must be open between the hosts"
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 245
+      - value: macsec
+        label: MACsec on a shared segment
+        consequence: "the hosts already share one L2 segment; a macsec device on the decided parent link encrypts it and is enslaved into the zone bridge, with the key as a credential"
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 243
+      - value: gre
+        label: GRE (L3 GRE over IPv4)
+        consequence: "one gre device per peer, each host's slice routed over it; no L2 between hosts, so aliases resolve per host; unencrypted"
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 231
+      - value: ip6gre
+        label: GRE over IPv6
+        consequence: the same routed GRE with IPv6 endpoints; every host needs an IPv6 address the others reach it at
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 231
+      - value: ipip
+        label: IPIP (IPv4 in IPv4)
+        consequence: "one ipip device per peer, each host's slice routed over it; the smallest header of the routed kinds and unencrypted"
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 215
+      - value: sit
+        label: SIT (IPv6 in IPv4)
+        consequence: "one sit device per peer; SIT carries IPv6 only, so it serves an estate whose ranges are IPv6 and not the IPv4 slices this plan derives"
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 215
+      - value: ip6tnl
+        label: IP6TNL (IPv4 or IPv6 in IPv6)
+        consequence: "one ip6tnl device per peer with Mode=any, each host's slice routed over it; every host needs an IPv6 address the others reach it at"
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 219
+      - value: vti
+        label: "VTI (IPsec, IPv4)"
+        consequence: "one vti device per peer carrying the decided key as the IPsec mark; the security associations themselves are not systemd's to configure"
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 231
+      - value: vti6
+        label: VTI over IPv6 (IPsec)
+        consequence: the same IPsec-marked tunnel with IPv6 endpoints; every host needs an IPv6 address the others reach it at
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 231
+      - value: xfrm
+        label: XFRM interface (IPsec)
+        consequence: "one xfrm device carrying the decided interface id, with every peer's slice routed over it; one device for all peers, and the security associations are configured out of band"
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 243
+      - value: bareudp
+        label: Bare UDP tunnel
+        consequence: one bareudp device carrying the decided L3 protocol in UDP on the decided port; a generic L3 encapsulation with the smallest possible configuration
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 247
+      - value: fou
+        label: IPIP inside Foo-over-UDP
+        consequence: "a fou receive port on the decided UDP port and one ipip device per peer encapsulated in it, each host's slice routed over them; UDP traverses middleboxes that drop protocol 4"
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 240
+      - value: wireguard
+        label: "WireGuard only, routed"
+        consequence: "each host's zone bridge subnet is routed over WireGuard; no L2 between hosts, aliases resolve per host"
+        requires: 
+          daemons: 
+            - networkd
+          systemd: 237
+      - value: underlay
+        label: route over the existing network
+        consequence: "no overlay; each host's bridge subnet must be reachable through the site's routers"
+    evidence: 
+      - "networks[web_frontend].encrypted=true"
+      - "networks[web_frontend].scope=swarm"
+      - members on 2 hosts
+    hosts: 
+      *hosts2
+    default: vxlan-wireguard
+    chosen: vxlan-wireguard
+    reason: "accepted the planner's default"
+  - id: networkd.vni.web_frontend
+    component: networkd
+    kind: value
+    subject: 
+      kind: network
+      name: web_frontend
+    question: Which network identifier (VNI) does web_frontend use when its transport is VXLAN or GENEVE? The default is its position among the application networks sorted by name.
+    format: port
+    evidence: 
+      - "networks[web_frontend] is application network 3 of 3 (sorted by name)"
+      - "networks[web_frontend].id=net1"
+    hosts: 
+      *hosts2
+    default: "3"
+    chosen: "3"
+    reason: "accepted the planner's default"
+  - id: networkd.wireguard.subnet.web_frontend
+    component: networkd
+    kind: value
+    subject: 
+      kind: network
+      name: web_frontend
+    question: "Which range do the WireGuard tunnel addresses of web_frontend come from (one address per host, when the transport uses WireGuard)? The default is a /24 of the RFC 6598 shared address space chosen by the network's position."
+    format: cidr
+    evidence: 
+      - "networks[web_frontend] is application network 3 (sorted by name)"
+      - "hosts: swarm-mgr-1, swarm-wrk-1"
+    hosts: 
+      *hosts2
+    default: 100.64.3.0/24
+    chosen: 100.64.3.0/24
+    reason: "accepted the planner's default"
+  - id: networkd.wireguard.port.estate
+    component: networkd
+    kind: value
+    subject: 
+      kind: estate
+      name: estate
+    question: Which UDP port do the WireGuard tunnels listen on? The first network sorted by name takes this port and each following one the next port up.
+    format: port
+    evidence: 
+      - "overlays span hosts: swarm-mgr-1, swarm-wrk-1"
+      - 51820 is the port WireGuard tooling uses by convention
+    default: "51820"
+    chosen: "51820"
+    reason: "accepted the planner's default"
+  - id: networkd.wireguard.endpoint.swarm-mgr-1
+    component: networkd
+    kind: value
+    subject: 
+      kind: host
+      name: swarm-mgr-1
+    question: "Which address do the other hosts reach swarm-mgr-1 at for overlay traffic (the WireGuard endpoint, or the VXLAN underlay address)?"
+    format: ipv4
+    evidence: 
+      - "hosts[swarm-mgr-1] not probed or without addresses"
+      - "nodes[swarm-mgr-1].addr=10.0.0.11"
+    hosts: 
+      - swarm-mgr-1
+    default: 10.0.0.11
+    chosen: 10.0.0.11
+    reason: "accepted the planner's default"
+  - id: networkd.wireguard.endpoint.swarm-wrk-1
+    component: networkd
+    kind: value
+    subject: 
+      kind: host
+      name: swarm-wrk-1
+    question: "Which address do the other hosts reach swarm-wrk-1 at for overlay traffic (the WireGuard endpoint, or the VXLAN underlay address)?"
+    format: ipv4
+    evidence: 
+      - "hosts[swarm-wrk-1] not probed or without addresses"
+      - "nodes[swarm-wrk-1].addr=10.0.0.12"
+    hosts: 
+      - swarm-wrk-1
+    default: 10.0.0.12
+    chosen: 10.0.0.12
+    reason: "accepted the planner's default"
+  - id: networkd.zone.web_app
+    component: networkd
+    kind: choice
+    subject: 
+      kind: service
+      name: web_app
+    question: "When web_app runs as a machine, which network zone does it attach to?"
+    options: 
+      - value: web_frontend
+        label: zone bridge vz-web_frontend
+        consequence: "a veth into the bridge of overlay network web_frontend, an address from its decided range, and its transport between hosts"
+      - value: host
+        label: "the host's network namespace"
+        consequence: "no zone and no private network; the machine binds the host's addresses like a plain service"
+    evidence: 
+      - "services[web_app].networks[web_frontend] aliases=app"
+    default: web_frontend
+    chosen: web_frontend
+    reason: "accepted the planner's default"
+  - id: networkd.zone.web_proxy
+    component: networkd
+    kind: choice
+    subject: 
+      kind: service
+      name: web_proxy
+    question: "When web_proxy runs as a machine, which network zone does it attach to?"
+    options: 
+      - value: web_frontend
+        label: zone bridge vz-web_frontend
+        consequence: "a veth into the bridge of overlay network web_frontend, an address from its decided range, and its transport between hosts"
+      - value: host
+        label: "the host's network namespace"
+        consequence: "no zone and no private network; the machine binds the host's addresses like a plain service"
+    evidence: 
+      - "services[web_proxy].networks[web_frontend] aliases=proxy"
+    default: web_frontend
+    chosen: web_frontend
+    reason: "accepted the planner's default"
+  - id: networkd.zone.data_postgres
+    component: networkd
+    kind: choice
+    subject: 
+      kind: service
+      name: data_postgres
+    question: "When data_postgres runs as a machine, which network zone does it attach to?"
+    options: 
+      - value: data_backend
+        label: zone bridge vz-data_backend
+        consequence: "a veth into the bridge of overlay network data_backend, an address from its decided range, and its transport between hosts"
+      - value: host
+        label: "the host's network namespace"
+        consequence: "no zone and no private network; the machine binds the host's addresses like a plain service"
+    evidence: 
+      - "services[data_postgres].networks[data_backend] aliases=postgres,db"
+    default: data_backend
+    chosen: data_backend
+    reason: "accepted the planner's default"
+  - id: networkd.zone.data_exporter
+    component: networkd
+    kind: choice
+    subject: 
+      kind: service
+      name: data_exporter
+    question: "When data_exporter runs as a machine, which network zone does it attach to?"
+    options: 
+      - value: data_backend
+        label: zone bridge vz-data_backend
+        consequence: "a veth into the bridge of overlay network data_backend, an address from its decided range, and its transport between hosts"
+      - value: data_monitoring
+        label: macvlan on the parent link of data_monitoring
+        consequence: "a macvlan interface on the decided parent link inside the machine, with an address the guest configures from the decided range"
+      - value: host
+        label: "the host's network namespace"
+        consequence: "no zone and no private network; the machine binds the host's addresses like a plain service"
+    evidence: 
+      - "services[data_exporter].networks[data_backend] aliases=exporter"
+      - "services[data_exporter].networks[data_monitoring] aliases=none"
+    default: data_backend
+    chosen: data_backend
+    reason: "accepted the planner's default"
+  - id: networkd.publish.web_app.8080-tcp
+    component: networkd
+    kind: choice
+    subject: 
+      kind: port
+      name: web_app:8080/tcp
+    question: Port 8080/tcp of web_app was published in ingress mode through the routing mesh. How do clients reach it now?
+    options: 
+      - value: host
+        label: on each host that runs it
+        consequence: "the service binds the port on its host; SocketBindAllow= restricts it to that port; clients use the host's address; it cannot honour an every-host ingress"
+      - value: socket
+        label: socket activation
+        consequence: a .socket unit owns the port and passes it in; the process must accept an inherited socket; it cannot honour an every-host ingress
+        requires: 
+          systemd: 250
+      - value: reuseport
+        label: socket activation with ReusePort=
+        consequence: "one .socket per instance on this host with ReusePort=yes, so the kernel spreads connections over the instances that share the host; the process must accept an inherited socket, and it cannot honour an every-host ingress"
+        requires: 
+          systemd: 250
+      - value: socket-proxyd
+        label: systemd-socket-proxyd per backend
+        consequence: "one .socket with ReusePort=yes per backend, each activating a systemd-socket-proxyd instance forwarding to that backend; spreads over every instance of the estate, local or remote, and honours the ingress scope"
+        requires: 
+          systemd: 250
+      - value: multipath
+        label: a virtual address with multipath routes
+        consequence: "the service gets an address of its own on a dummy netdev and the hosts that run no instance route it over the backends; layer 3, per flow, not health aware, and honours the ingress scope"
+        requires: 
+          systemd: 245
+      - value: haproxy
+        label: HAProxy
+        consequence: the haproxy-ingress component renders a hardened haproxy unit with one backend per instance and health checks from the source healthcheck; honours the ingress scope and needs the haproxy binary on the host
+        requires: 
+          tools: 
+            - haproxy
+      - value: external-lb
+        label: behind an external load balancer
+        consequence: "same as host, and the plan lists the hosts as backends for the balancer you operate"
+      - value: dns-rr
+        label: DNS round robin
+        consequence: "same as host, plus one resolved/dnssd record per host announcing the port"
+    evidence: 
+      - "services[web_app].ports[8080] mode=ingress published=8080"
+      - "services[web_app].endpoint_mode=vip"
+      - "services[web_app].mode=replicated replicas=2"
+    default: null
+    chosen: host
+  - id: networkd.ingress.web_app.8080-tcp
+    component: networkd
+    kind: choice
+    subject: 
+      kind: port
+      name: web_app:8080/tcp
+    question: "Where does port 8080/tcp of web_app exist: only where the service runs, or on every host of the plan?"
+    options: 
+      - value: placement-hosts
+        label: the hosts that run it
+        consequence: the port is bound where an instance lands; clients have to know which hosts those are
+      - value: every-host
+        label: every host of the plan
+        consequence: "the routing mesh of the source: every host accepts the port and forwards to an instance; only socket-proxyd, multipath, and haproxy can honour it"
+    evidence: 
+      - "services[web_app].ports[8080] mode=ingress"
+      - the source accepted this port on every node through the routing mesh
+    default: placement-hosts
+    chosen: placement-hosts
+    reason: "accepted the planner's default"
+  - id: networkd.publish.web_proxy.80-tcp
+    component: networkd
+    kind: choice
+    subject: 
+      kind: port
+      name: web_proxy:80/tcp
+    question: Port 80/tcp of web_proxy was published in host mode. How do clients reach it now?
+    options: 
+      - value: host
+        label: on each host that runs it
+        consequence: "the service binds the port on its host; SocketBindAllow= restricts it to that port; clients use the host's address; it cannot honour an every-host ingress"
+      - value: socket
+        label: socket activation
+        consequence: a .socket unit owns the port and passes it in; the process must accept an inherited socket; it cannot honour an every-host ingress
+        requires: 
+          systemd: 250
+      - value: reuseport
+        label: socket activation with ReusePort=
+        consequence: "one .socket per instance on this host with ReusePort=yes, so the kernel spreads connections over the instances that share the host; the process must accept an inherited socket, and it cannot honour an every-host ingress"
+        requires: 
+          systemd: 250
+      - value: socket-proxyd
+        label: systemd-socket-proxyd per backend
+        consequence: "one .socket with ReusePort=yes per backend, each activating a systemd-socket-proxyd instance forwarding to that backend; spreads over every instance of the estate, local or remote, and honours the ingress scope"
+        requires: 
+          systemd: 250
+      - value: multipath
+        label: a virtual address with multipath routes
+        consequence: "the service gets an address of its own on a dummy netdev and the hosts that run no instance route it over the backends; layer 3, per flow, not health aware, and honours the ingress scope"
+        requires: 
+          systemd: 245
+      - value: haproxy
+        label: HAProxy
+        consequence: the haproxy-ingress component renders a hardened haproxy unit with one backend per instance and health checks from the source healthcheck; honours the ingress scope and needs the haproxy binary on the host
+        requires: 
+          tools: 
+            - haproxy
+      - value: external-lb
+        label: behind an external load balancer
+        consequence: "same as host, and the plan lists the hosts as backends for the balancer you operate"
+      - value: dns-rr
+        label: DNS round robin
+        consequence: "same as host, plus one resolved/dnssd record per host announcing the port"
+    evidence: 
+      - "services[web_proxy].ports[80] mode=host published=80"
+      - "services[web_proxy].endpoint_mode=vip"
+      - "services[web_proxy].mode=global"
+    default: host
+    chosen: host
+    reason: "accepted the planner's default"
+  - id: networkd.ingress.web_proxy.80-tcp
+    component: networkd
+    kind: choice
+    subject: 
+      kind: port
+      name: web_proxy:80/tcp
+    question: "Where does port 80/tcp of web_proxy exist: only where the service runs, or on every host of the plan?"
+    options: 
+      - value: placement-hosts
+        label: the hosts that run it
+        consequence: the port is bound where an instance lands; clients have to know which hosts those are
+      - value: every-host
+        label: every host of the plan
+        consequence: "the routing mesh of the source: every host accepts the port and forwards to an instance; only socket-proxyd, multipath, and haproxy can honour it"
+    evidence: 
+      - "services[web_proxy].ports[80] mode=host"
+      - the source bound this port only on the nodes that ran the task
+    default: placement-hosts
+    chosen: placement-hosts
+    reason: "accepted the planner's default"
+  - id: networkd.publish.data_exporter.9187-tcp
+    component: networkd
+    kind: choice
+    subject: 
+      kind: port
+      name: data_exporter:9187/tcp
+    question: Port 9187/tcp of data_exporter was published in host mode. How do clients reach it now?
+    options: 
+      - value: host
+        label: on each host that runs it
+        consequence: "the service binds the port on its host; SocketBindAllow= restricts it to that port; clients use the host's address; it cannot honour an every-host ingress"
+      - value: socket
+        label: socket activation
+        consequence: a .socket unit owns the port and passes it in; the process must accept an inherited socket; it cannot honour an every-host ingress
+        requires: 
+          systemd: 250
+      - value: reuseport
+        label: socket activation with ReusePort=
+        consequence: "one .socket per instance on this host with ReusePort=yes, so the kernel spreads connections over the instances that share the host; the process must accept an inherited socket, and it cannot honour an every-host ingress"
+        requires: 
+          systemd: 250
+      - value: socket-proxyd
+        label: systemd-socket-proxyd per backend
+        consequence: "one .socket with ReusePort=yes per backend, each activating a systemd-socket-proxyd instance forwarding to that backend; spreads over every instance of the estate, local or remote, and honours the ingress scope"
+        requires: 
+          systemd: 250
+      - value: multipath
+        label: a virtual address with multipath routes
+        consequence: "the service gets an address of its own on a dummy netdev and the hosts that run no instance route it over the backends; layer 3, per flow, not health aware, and honours the ingress scope"
+        requires: 
+          systemd: 245
+      - value: haproxy
+        label: HAProxy
+        consequence: the haproxy-ingress component renders a hardened haproxy unit with one backend per instance and health checks from the source healthcheck; honours the ingress scope and needs the haproxy binary on the host
+        requires: 
+          tools: 
+            - haproxy
+      - value: external-lb
+        label: behind an external load balancer
+        consequence: "same as host, and the plan lists the hosts as backends for the balancer you operate"
+      - value: dns-rr
+        label: DNS round robin
+        consequence: "same as host, plus one resolved/dnssd record per host announcing the port"
+    evidence: 
+      - "services[data_exporter].ports[9187] mode=host published=9187"
+      - "services[data_exporter].endpoint_mode=vip"
+      - "services[data_exporter].mode=replicated replicas=1"
+    default: host
+    chosen: host
+    reason: "accepted the planner's default"
+  - id: networkd.ingress.data_exporter.9187-tcp
+    component: networkd
+    kind: choice
+    subject: 
+      kind: port
+      name: data_exporter:9187/tcp
+    question: "Where does port 9187/tcp of data_exporter exist: only where the service runs, or on every host of the plan?"
+    options: 
+      - value: placement-hosts
+        label: the hosts that run it
+        consequence: the port is bound where an instance lands; clients have to know which hosts those are
+      - value: every-host
+        label: every host of the plan
+        consequence: "the routing mesh of the source: every host accepts the port and forwards to an instance; only socket-proxyd, multipath, and haproxy can honour it"
+    evidence: 
+      - "services[data_exporter].ports[9187] mode=host"
+      - the source bound this port only on the nodes that ran the task
+    default: placement-hosts
+    chosen: placement-hosts
+    reason: "accepted the planner's default"
+  - id: resolved.discovery.estate
+    component: resolved
+    kind: choice
+    subject: 
+      kind: estate
+      name: estate
+    question: "How do services resolve each other's names on the systemd hosts?"
+    options: 
+      - value: hosts
+        label: /etc/hosts entries
+        consequence: "each host gets a rendered hosts fragment mapping service names and aliases to the host that runs them; static, no daemon"
+      - value: dnssd
+        label: resolved with DNS-SD
+        consequence: each host announces its services with .dnssd files and resolves peers through mDNS/LLMNR on the zone
+        requires: 
+          daemons: 
+            - resolved
+      - value: site-dns
+        label: "the site's DNS"
+        consequence: "you publish the records; the plan lists name, host, and port for each service"
+    evidence: 
+      - "service names and aliases in use: app, db, exporter, postgres, proxy"
+    default: null
+    chosen: hosts
+  - id: journald.namespace.data
+    component: journald
+    kind: choice
+    subject: 
+      kind: stack
+      name: data
+    question: "Does stack data log into the host's journal or into its own journal namespace?"
+    options: 
+      - value: shared
+        label: "the host's journal"
+        consequence: one journal; filter with SWARM_STACK=NAME or the unit name
+      - value: namespace
+        label: its own namespace
+        consequence: LogNamespace=data on every unit; journald@data.service keeps a separate journal with its own retention (journald@.conf)
+    evidence: 
+      - "services[data_exporter].logging"
+      - "services[data_postgres].logging"
+    default: shared
+    chosen: shared
+    reason: "accepted the planner's default"
+  - id: journald.namespace.web
+    component: journald
+    kind: choice
+    subject: 
+      kind: stack
+      name: web
+    question: "Does stack web log into the host's journal or into its own journal namespace?"
+    options: 
+      - value: shared
+        label: "the host's journal"
+        consequence: one journal; filter with SWARM_STACK=NAME or the unit name
+      - value: namespace
+        label: its own namespace
+        consequence: LogNamespace=web on every unit; journald@web.service keeps a separate journal with its own retention (journald@.conf)
+    evidence: 
+      - "services[web_app].logging"
+      - "services[web_proxy].logging"
+    default: shared
+    chosen: shared
+    reason: "accepted the planner's default"
+  - id: sysext.configs.web
+    component: sysext
+    kind: choice
+    subject: 
+      kind: stack
+      name: web
+    question: How do the config files of stack web reach the hosts?
+    options: 
+      - value: files
+        label: plain files under /etc/<stack>/configs
+        consequence: installed by install.sh with the ownership the source recorded; bound read-only into each service
+      - value: confext
+        label: a configuration extension
+        consequence: "the files are packed into /var/lib/confexts/<stack>.raw (or a directory) and merged into /etc by systemd-confext; one artifact, atomic refresh"
+        requires: 
+          systemd: 251
+          tools: 
+            - systemd-confext
+    evidence: 
+      - "services[web_proxy].configs[web_caddyfile]"
+    default: files
+    chosen: files
+    reason: "accepted the planner's default"
+  - id: portable.capsule.data
+    component: portable
+    kind: choice
+    subject: 
+      kind: stack
+      name: data
+    question: Does stack data run under the system manager or under its own capsule?
+    options: 
+      - value: system
+        label: the system manager
+        consequence: units under /etc/systemd/system grouped by the stack target and slice
+      - value: capsule
+        label: a capsule
+        consequence: "capsule@data.service starts a per-stack user manager; the stack's units become its user units under /var/lib/capsules/data/.config/systemd/user"
+        requires: 
+          systemd: 256
+    evidence: 
+      - "services[data_exporter]"
+      - "services[data_postgres]"
+    default: system
+    chosen: system
+    reason: "accepted the planner's default"
+  - id: portable.capsule.web
+    component: portable
+    kind: choice
+    subject: 
+      kind: stack
+      name: web
+    question: Does stack web run under the system manager or under its own capsule?
+    options: 
+      - value: system
+        label: the system manager
+        consequence: units under /etc/systemd/system grouped by the stack target and slice
+      - value: capsule
+        label: a capsule
+        consequence: "capsule@web.service starts a per-stack user manager; the stack's units become its user units under /var/lib/capsules/web/.config/systemd/user"
+        requires: 
+          systemd: 256
+    evidence: 
+      - "services[web_app]"
+      - "services[web_proxy]"
+    default: system
+    chosen: system
+    reason: "accepted the planner's default"
+  - id: quadlet.secrets.estate
+    component: quadlet
+    kind: choice
+    subject: 
+      kind: estate
+      name: estate
+    question: How do secrets and redacted environment values reach a service rendered as a Quadlet container?
+    options: 
+      - value: podman-secret
+        label: Podman secrets
+        consequence: "the .container references each with Secret=<name>,type=mount or type=env and secrets/import-secrets.sh creates them with podman secret create --replace from /etc/swarm-migration/secrets; the creds component leaves Quadlet services alone"
+        requires: 
+          tools: 
+            - podman
+    evidence: 
+      - "secrets[web_app_signing_key] used by web_app"
+      - "secrets[data_postgres_password] used by data_postgres, data_exporter"
+      - "services[web_app].env.APP_SECRET_KEY was redacted at capture"
+      - podman-systemd.unit(5) documents Secret= as the only secret source of a .container; a systemd credential path is not offered because Quadlet does not document one (see references/field-map.md)
+    default: podman-secret
+    chosen: podman-secret
+    reason: "accepted the planner's default"
+  - id: quadlet.auto_update.estate
+    component: quadlet
+    kind: choice
+    subject: 
+      kind: estate
+      name: estate
+    question: "Add AutoUpdate=registry to Quadlet containers whose image is a tag rather than a digest, so podman-auto-update.timer can roll them?"
+    options: 
+      - value: "no"
+        label: no automatic updates
+        consequence: an image changes only when the operator pulls it and restarts the unit
+      - value: "yes"
+        label: AutoUpdate=registry on tag-based images
+        consequence: podman-auto-update.timer pulls a newer tag and restarts the unit; images pinned to a digest are left alone
+    evidence: 
+      - "services[web_proxy].image_digest=null"
+      - "services[data_exporter].image_digest=null"
+    default: "no"
+    chosen: "no"
+    reason: "accepted the planner's default"
+  - id: quadlet.selinux.estate
+    component: quadlet
+    kind: choice
+    subject: 
+      kind: estate
+      name: estate
+    question: "Append SELinux relabel suffixes (:z shared, :Z private) to bind mounts and config mounts in the Quadlet containers?"
+    options: 
+      - value: "no"
+        label: no relabeling
+        consequence: "mounts keep their labels; needed on hosts without SELinux, and where the paths are already labeled container_file_t"
+      - value: "yes"
+        label: relabel bind mounts
+        consequence: "bind mounts get ,Z (read-write) or ,z (read-only) and config mounts ,z so the container can read them under an enforcing policy"
+    evidence: 
+      - "no probed host reports an SELinux distribution; choose yes on Fedora, RHEL, or a derivative in enforcing mode"
+    default: "no"
+    chosen: "no"
+    reason: "accepted the planner's default"
+  - id: quadlet.unit_dir.estate
+    component: quadlet
+    kind: value
+    subject: 
+      kind: estate
+      name: estate
+    question: "Where do the Quadlet files (.container, .network, .volume) go on the hosts?"
+    format: path
+    evidence: 
+      - podman-systemd.unit(5) reads /etc/containers/systemd for rootful units and ~/.config/containers/systemd for rootless ones
+    default: /etc/containers/systemd
+    chosen: /etc/containers/systemd
+    reason: "accepted the planner's default"
+  - id: quadlet.config_dir.estate
+    component: quadlet
+    kind: value
+    subject: 
+      kind: estate
+      name: estate
+    question: "Where do config payloads go on the hosts, to be mounted read-only into the Quadlet containers?"
+    format: path
+    evidence: 
+      - "configs[web_caddyfile] used by web_proxy"
+    default: /etc/containers/swarm-configs
+    chosen: /etc/containers/swarm-configs
+    reason: "accepted the planner's default"
+  - id: generator.stacks.estate
+    component: generator
+    kind: choice
+    subject: 
+      kind: estate
+      name: estate
+    question: "How do the stack targets and slices reach the host: rendered unit files, or a generator reading a declarative stack description at boot?"
+    options: 
+      - value: static
+        label: rendered unit files
+        consequence: "<stack>.target and stack-<stack>.slice are files under /etc/systemd/system, installed by install.sh"
+      - value: generator
+        label: systemd-migration-generator
+        consequence: "install.sh writes /etc/systemd-migration/stacks.d/<stack>.conf and installs the generator under /usr/lib/systemd/system-generators/; the manager emits the targets, slices, and Wants= into the generator directory on every boot and every daemon-reload, so an edit to the description needs no re-render"
+    evidence: 
+      - "stacks[data]"
+      - "stacks[web]"
+    default: static
+    chosen: static
+    reason: "accepted the planner's default"
+  - id: generator.preset.estate
+    component: generator
+    kind: choice
+    subject: 
+      kind: estate
+      name: estate
+    question: Is the enable state of the rendered units decided by a preset file?
+    options: 
+      - value: "no"
+        label: install.sh enables the stack targets
+        consequence: systemctl enable <stack>.target per stack in install.sh; nothing else is enabled
+      - value: "yes"
+        label: a preset file
+        consequence: "/usr/lib/systemd/system-preset/80-systemd-migration.preset enables every rendered unit with an [Install] section and disables what the estate runs no replica of; install.sh runs systemctl preset over those units, never preset-all"
+    evidence: 
+      - "stacks[data]"
+      - "stacks[web]"
+    default: "no"
+    chosen: "no"
+    reason: "accepted the planner's default"
+  - id: rollout.order.data_postgres
+    component: rollout
+    kind: choice
+    subject: 
+      kind: service
+      name: data_postgres
+    question: In what order does a batch of data_postgres change over during a deploy?
+    options: 
+      - value: stop-first
+        label: "stop the batch, then start it"
+        consequence: "the batch's capacity is gone while it restarts; the only order a single instance can have"
+      - value: start-first
+        label: "keep the rest up, then restart the batch"
+        consequence: "the controller confirms the instances outside the batch are active before restarting it, so capacity never drops below the instance count minus the parallelism"
+    evidence: 
+      - "services[data_postgres].update_config.order=stop-first"
+      - "services[data_postgres].replicas=1"
+      - placement.hosts.data_postgres=swarm-wrk-1
+    default: stop-first
+    chosen: stop-first
+    reason: "accepted the planner's default"
+  - id: rollout.failure.data_postgres
+    component: rollout
+    kind: choice
+    subject: 
+      kind: service
+      name: data_postgres
+    question: What does the controller do when a batch of data_postgres is not active and healthy within the monitor window?
+    options: 
+      - value: pause
+        label: stop the deploy where it is
+        consequence: the remaining batches are left alone and the controller exits non-zero; the operator decides what follows
+      - value: continue
+        label: carry on with the next batch
+        consequence: every batch is changed over whatever the health results say; only for services where a failing instance costs nothing
+      - value: rollback
+        label: roll the service back
+        consequence: "the image target this deploy replaced is restored and the service's instances are restarted in the same batches before the controller exits non-zero"
+    evidence: 
+      - "services[data_postgres].update_config.failure_action=pause"
+      - "services[data_postgres].healthcheck.test"
+    default: pause
+    chosen: pause
+    reason: "accepted the planner's default"
+  - id: rollout.order.web_app
+    component: rollout
+    kind: choice
+    subject: 
+      kind: service
+      name: web_app
+    question: In what order does a batch of web_app change over during a deploy?
+    options: 
+      - value: stop-first
+        label: "stop the batch, then start it"
+        consequence: "the batch's capacity is gone while it restarts; the only order a single instance can have"
+      - value: start-first
+        label: "keep the rest up, then restart the batch"
+        consequence: "the controller confirms the instances outside the batch are active before restarting it, so capacity never drops below the instance count minus the parallelism"
+    evidence: 
+      - "services[web_app].update_config.order=start-first"
+      - "services[web_app].replicas=2"
+      - placement.hosts.web_app=swarm-wrk-1
+    default: start-first
+    chosen: start-first
+    reason: "accepted the planner's default"
+  - id: rollout.failure.web_app
+    component: rollout
+    kind: choice
+    subject: 
+      kind: service
+      name: web_app
+    question: What does the controller do when a batch of web_app is not active and healthy within the monitor window?
+    options: 
+      - value: pause
+        label: stop the deploy where it is
+        consequence: the remaining batches are left alone and the controller exits non-zero; the operator decides what follows
+      - value: continue
+        label: carry on with the next batch
+        consequence: every batch is changed over whatever the health results say; only for services where a failing instance costs nothing
+      - value: rollback
+        label: roll the service back
+        consequence: "the image target this deploy replaced is restored and the service's instances are restarted in the same batches before the controller exits non-zero"
+    evidence: 
+      - "services[web_app].update_config.failure_action=rollback"
+      - "services[web_app].healthcheck.test"
+    default: rollback
+    chosen: rollback
+    reason: "accepted the planner's default"
+  - id: rollout.monitor.estate
+    component: rollout
+    kind: value
+    subject: 
+      kind: estate
+      name: estate
+    question: "How long is a batch watched after it changes over, before the deploy moves on? A systemd time span (systemd.time(7)), used for every service whose source named no monitor window."
+    format: text
+    evidence: 
+      - "services[web_app].update_config.monitor=30s"
+      - the longest monitor window the source names
+    default: 30s
+    chosen: 30s
+    reason: "accepted the planner's default"

@@ -1,0 +1,7 @@
+# Rendered by systemd-migration: announces data_exporter port 9187/tcp on swarm-wrk-1
+
+[Service]
+Name=data_exporter on %H
+Type=_exporter._tcp
+Port=9187
+TxtText=stack=data service=data_exporter

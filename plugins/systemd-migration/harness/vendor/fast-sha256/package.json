@@ -1,0 +1,9 @@
+{
+  "name": "fast-sha256",
+  "version": "1.3.0-node",
+  "description": "Drop-in replacement for the subset of fast-sha256 that standardwebhooks uses, backed by node:crypto. Installed through the overrides field so the unmaintained npm package never enters the dependency tree.",
+  "license": "LGPL-2.1-or-later",
+  "type": "commonjs",
+  "main": "index.js",
+  "types": "index.d.ts"
+}

@@ -1,0 +1,8 @@
+# Rendered by systemd-migration: groups the units of stack web on swarm-wrk-1
+
+[Unit]
+Description=stack web
+Wants=web_app.service
+
+[Install]
+WantedBy=multi-user.target

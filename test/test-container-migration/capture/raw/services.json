@@ -1,0 +1,471 @@
+[
+  {
+    "ID": "s2",
+    "Spec": {
+      "Name": "web_app",
+      "Labels": {
+        "com.docker.stack.namespace": "web"
+      },
+      "TaskTemplate": {
+        "ContainerSpec": {
+          "Image": "registry.example.com/acme/app:2026.09@sha256:0000000000000000000000000000000000000000000000000000000000000002",
+          "Args": [
+            "serve",
+            "--port",
+            "8080"
+          ],
+          "Env": [
+            "DATABASE_URL=postgres://app@data_postgres:5432/app",
+            "APP_SECRET_KEY=fixture-placeholder-not-a-secret",
+            "LOG_LEVEL=info"
+          ],
+          "Hosts": [
+            "10.0.9.9 legacy.internal"
+          ],
+          "User": "1000:1000",
+          "Dir": "/srv/app",
+          "Mounts": [
+            {
+              "Type": "tmpfs",
+              "Target": "/tmp",
+              "TmpfsOptions": {
+                "SizeBytes": 67108864
+              }
+            },
+            {
+              "Type": "volume",
+              "Source": "web_cache",
+              "Target": "/cache",
+              "VolumeOptions": {
+                "Labels": {}
+              }
+            }
+          ],
+          "StopGracePeriod": 30000000000,
+          "Healthcheck": {
+            "Test": [
+              "CMD-SHELL",
+              "curl -fsS http://localhost:8080/healthz || exit 1"
+            ],
+            "Interval": 15000000000,
+            "Timeout": 5000000000,
+            "Retries": 3,
+            "StartPeriod": 20000000000
+          },
+          "Secrets": [
+            {
+              "File": {
+                "Name": "signing_key",
+                "UID": "1000",
+                "GID": "1000",
+                "Mode": 256
+              },
+              "SecretID": "sec1",
+              "SecretName": "web_app_signing_key"
+            }
+          ],
+          "Configs": [],
+          "CapabilityDrop": [
+            "ALL"
+          ],
+          "Init": true,
+          "ReadOnly": true,
+          "Ulimits": [
+            {
+              "Name": "nofile",
+              "Soft": 65536,
+              "Hard": 65536
+            }
+          ],
+          "Sysctls": {
+            "net.core.somaxconn": "1024"
+          }
+        },
+        "Resources": {
+          "Limits": {
+            "NanoCPUs": 1500000000,
+            "MemoryBytes": 536870912,
+            "Pids": 512
+          },
+          "Reservations": {
+            "MemoryBytes": 134217728
+          }
+        },
+        "RestartPolicy": {
+          "Condition": "on-failure",
+          "Delay": 3000000000,
+          "MaxAttempts": 5,
+          "Window": 120000000000
+        },
+        "Placement": {
+          "Constraints": [
+            "node.role == worker"
+          ],
+          "MaxReplicas": 1
+        },
+        "Networks": [
+          {
+            "Target": "net1",
+            "Aliases": [
+              "app"
+            ]
+          }
+        ],
+        "LogDriver": {
+          "Name": "json-file",
+          "Options": {
+            "max-size": "10m"
+          }
+        }
+      },
+      "Mode": {
+        "Replicated": {
+          "Replicas": 2
+        }
+      },
+      "UpdateConfig": {
+        "Parallelism": 1,
+        "Delay": 10000000000,
+        "FailureAction": "rollback",
+        "Monitor": 30000000000,
+        "MaxFailureRatio": 0,
+        "Order": "start-first"
+      },
+      "EndpointSpec": {
+        "Mode": "vip",
+        "Ports": [
+          {
+            "Protocol": "tcp",
+            "TargetPort": 8080,
+            "PublishedPort": 8080,
+            "PublishMode": "ingress"
+          }
+        ]
+      }
+    },
+    "Endpoint": {
+      "Spec": {
+        "Mode": "vip",
+        "Ports": [
+          {
+            "Protocol": "tcp",
+            "TargetPort": 8080,
+            "PublishedPort": 8080,
+            "PublishMode": "ingress"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "ID": "s1",
+    "Spec": {
+      "Name": "web_proxy",
+      "Labels": {
+        "com.docker.stack.namespace": "web"
+      },
+      "TaskTemplate": {
+        "ContainerSpec": {
+          "Image": "docker.io/library/caddy:2",
+          "Env": [
+            "CADDY_ADMIN=off"
+          ],
+          "Configs": [
+            {
+              "File": {
+                "Name": "/etc/caddy/Caddyfile",
+                "UID": "0",
+                "GID": "0",
+                "Mode": 292
+              },
+              "ConfigID": "c1",
+              "ConfigName": "web_caddyfile"
+            }
+          ],
+          "CapabilityAdd": [
+            "NET_BIND_SERVICE"
+          ]
+        },
+        "RestartPolicy": {
+          "Condition": "any",
+          "Delay": 5000000000
+        },
+        "Placement": {
+          "Constraints": [
+            "node.labels.tier == edge"
+          ]
+        },
+        "Networks": [
+          {
+            "Target": "net1",
+            "Aliases": [
+              "proxy"
+            ]
+          }
+        ]
+      },
+      "Mode": {
+        "Global": {}
+      },
+      "EndpointSpec": {
+        "Mode": "vip",
+        "Ports": [
+          {
+            "Protocol": "tcp",
+            "TargetPort": 80,
+            "PublishedPort": 80,
+            "PublishMode": "host"
+          }
+        ]
+      }
+    },
+    "Endpoint": {
+      "Spec": {
+        "Mode": "vip",
+        "Ports": [
+          {
+            "Protocol": "tcp",
+            "TargetPort": 80,
+            "PublishedPort": 80,
+            "PublishMode": "host"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "ID": "s3",
+    "Spec": {
+      "Name": "data_postgres",
+      "Labels": {
+        "com.docker.stack.namespace": "data"
+      },
+      "TaskTemplate": {
+        "ContainerSpec": {
+          "Image": "docker.io/library/postgres:16.4@sha256:0000000000000000000000000000000000000000000000000000000000000003",
+          "Env": [
+            "POSTGRES_DB=app",
+            "POSTGRES_USER=app",
+            "POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password",
+            "PGDATA=/var/lib/postgresql/data/pgdata"
+          ],
+          "Mounts": [
+            {
+              "Type": "volume",
+              "Source": "data_pgdata",
+              "Target": "/var/lib/postgresql/data",
+              "VolumeOptions": {
+                "Labels": {}
+              }
+            },
+            {
+              "Type": "volume",
+              "Source": "data_backups",
+              "Target": "/backups",
+              "VolumeOptions": {
+                "DriverConfig": {
+                  "Name": "local",
+                  "Options": {
+                    "type": "nfs",
+                    "o": "addr=10.0.0.50,rw,nfsvers=4",
+                    "device": ":/exports/backups"
+                  }
+                }
+              }
+            },
+            {
+              "Type": "bind",
+              "Source": "/etc/localtime",
+              "Target": "/etc/localtime",
+              "ReadOnly": true
+            }
+          ],
+          "StopGracePeriod": 60000000000,
+          "StopSignal": "SIGINT",
+          "Healthcheck": {
+            "Test": [
+              "CMD-SHELL",
+              "pg_isready -U app"
+            ],
+            "Interval": 10000000000,
+            "Timeout": 5000000000,
+            "Retries": 5,
+            "StartPeriod": 30000000000
+          },
+          "Secrets": [
+            {
+              "File": {
+                "Name": "postgres_password",
+                "UID": "999",
+                "GID": "999",
+                "Mode": 256
+              },
+              "SecretID": "sec2",
+              "SecretName": "data_postgres_password"
+            }
+          ],
+          "Configs": [],
+          "Sysctls": {
+            "kernel.shmmax": "1073741824"
+          },
+          "Ulimits": [
+            {
+              "Name": "nofile",
+              "Soft": 16384,
+              "Hard": 16384
+            }
+          ]
+        },
+        "Resources": {
+          "Limits": {
+            "NanoCPUs": 2000000000,
+            "MemoryBytes": 2147483648
+          },
+          "Reservations": {
+            "MemoryBytes": 1073741824
+          }
+        },
+        "RestartPolicy": {
+          "Condition": "any",
+          "Delay": 5000000000
+        },
+        "Placement": {
+          "Constraints": [
+            "node.labels.db == true"
+          ]
+        },
+        "Networks": [
+          {
+            "Target": "net2",
+            "Aliases": [
+              "postgres",
+              "db"
+            ]
+          }
+        ],
+        "LogDriver": {
+          "Name": "json-file",
+          "Options": {
+            "max-size": "50m",
+            "max-file": "3"
+          }
+        }
+      },
+      "Mode": {
+        "Replicated": {
+          "Replicas": 1
+        }
+      },
+      "UpdateConfig": {
+        "Parallelism": 1,
+        "Delay": 0,
+        "FailureAction": "pause",
+        "Monitor": 5000000000,
+        "MaxFailureRatio": 0,
+        "Order": "stop-first"
+      },
+      "EndpointSpec": {
+        "Mode": "dnsrr"
+      }
+    },
+    "Endpoint": {
+      "Spec": {
+        "Mode": "dnsrr"
+      }
+    }
+  },
+  {
+    "ID": "s4",
+    "Spec": {
+      "Name": "data_exporter",
+      "Labels": {
+        "com.docker.stack.namespace": "data"
+      },
+      "TaskTemplate": {
+        "ContainerSpec": {
+          "Image": "quay.io/prometheuscommunity/postgres-exporter:v0.15.0",
+          "Env": [
+            "DATA_SOURCE_URI=postgres:5432/app?sslmode=disable",
+            "DATA_SOURCE_USER=app",
+            "DATA_SOURCE_PASS_FILE=/run/secrets/postgres_password"
+          ],
+          "Secrets": [
+            {
+              "File": {
+                "Name": "postgres_password",
+                "UID": "0",
+                "GID": "0",
+                "Mode": 256
+              },
+              "SecretID": "sec2",
+              "SecretName": "data_postgres_password"
+            }
+          ],
+          "Configs": [],
+          "CapabilityDrop": [
+            "ALL"
+          ],
+          "ReadOnly": true,
+          "Privileges": {
+            "NoNewPrivileges": true
+          }
+        },
+        "Resources": {
+          "Limits": {
+            "MemoryBytes": 134217728
+          }
+        },
+        "RestartPolicy": {
+          "Condition": "any",
+          "Delay": 5000000000
+        },
+        "Placement": {
+          "Constraints": [
+            "node.labels.db == true"
+          ]
+        },
+        "Networks": [
+          {
+            "Target": "net2",
+            "Aliases": [
+              "exporter"
+            ]
+          },
+          {
+            "Target": "net3",
+            "Aliases": []
+          }
+        ]
+      },
+      "Mode": {
+        "Replicated": {
+          "Replicas": 1
+        }
+      },
+      "EndpointSpec": {
+        "Mode": "vip",
+        "Ports": [
+          {
+            "Protocol": "tcp",
+            "TargetPort": 9187,
+            "PublishedPort": 9187,
+            "PublishMode": "host"
+          }
+        ]
+      }
+    },
+    "Endpoint": {
+      "Spec": {
+        "Mode": "vip",
+        "Ports": [
+          {
+            "Protocol": "tcp",
+            "TargetPort": 9187,
+            "PublishedPort": 9187,
+            "PublishMode": "host"
+          }
+        ]
+      }
+    }
+  }
+]

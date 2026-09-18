@@ -407,6 +407,7 @@ if install_tests
                 'test-journals',
                 'test-network',
                 'test-network-generator-conversion',
+                'test-container-migration',
                 'test-path',
                 'test-path-util',
                 'test-sched-prio',
@@ -444,6 +445,13 @@ if install_tests
                                                  rsync_r.format(meson.current_source_dir() / subdir, testdata_dir))
                 endif
         endforeach
+
+        # The container migration integration test runs the plugin's host probe
+        # and verifier on the test machine; it looks for them next to the
+        # fixture estate.
+        install_data(meson.project_source_root() / 'plugins/systemd-migration/skills/discover-systemd-hosts/scripts/probe.sh',
+                     meson.project_source_root() / 'plugins/systemd-migration/skills/systemd-verify/scripts/verify.sh',
+                     install_dir : testdata_dir / 'test-container-migration')
 
         install_data(kbd_model_map,
                      install_dir : testdata_dir + '/test-keymap-util')

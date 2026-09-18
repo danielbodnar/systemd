@@ -1,0 +1,12 @@
+# Rendered by systemd-service: healthcheck schedule of service web_app
+
+[Unit]
+Description=healthcheck timer for web_app
+PartOf=web_app.service
+After=web_app.service
+
+[Timer]
+OnActiveSec=20
+OnUnitActiveSec=15
+Unit=web_app-health.service
+AccuracySec=1s

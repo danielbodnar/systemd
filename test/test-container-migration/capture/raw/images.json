@@ -1,0 +1,32 @@
+[
+  {
+    "Id": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "RepoTags": ["registry.example.com/acme/app:2026.09"],
+    "RepoDigests": ["registry.example.com/acme/app@sha256:0000000000000000000000000000000000000000000000000000000000000002"],
+    "Config": {
+      "User": "1000:1000",
+      "ExposedPorts": { "8080/tcp": {} },
+      "Env": ["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin/bin", "APP_HOME=/srv/app"],
+      "Entrypoint": ["/usr/bin/app"],
+      "Cmd": ["serve"],
+      "WorkingDir": "/srv/app",
+      "Volumes": { "/cache": {} },
+      "Labels": { "org.opencontainers.image.source": "https://git.example.com/acme/app" }
+    }
+  },
+  {
+    "Id": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "RepoTags": ["docker.io/library/caddy:2", "caddy:2"],
+    "RepoDigests": ["caddy@sha256:0000000000000000000000000000000000000000000000000000000000000004"],
+    "Config": {
+      "User": "",
+      "ExposedPorts": { "80/tcp": {}, "443/tcp": {}, "443/udp": {}, "2019/tcp": {} },
+      "Env": ["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "CADDY_VERSION=v2.8.4", "XDG_CONFIG_HOME=/config", "XDG_DATA_HOME=/data"],
+      "Entrypoint": null,
+      "Cmd": ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"],
+      "WorkingDir": "/srv",
+      "Volumes": null,
+      "Labels": { "org.opencontainers.image.title": "Caddy" }
+    }
+  }
+]

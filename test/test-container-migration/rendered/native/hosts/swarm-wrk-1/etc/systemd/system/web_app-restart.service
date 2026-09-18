@@ -1,0 +1,8 @@
+# Rendered by systemd-service: restarts service web_app after 3 failed healthchecks
+
+[Unit]
+Description=restart web_app after a failed healthcheck
+
+[Service]
+Type=oneshot
+ExecStart=systemctl restart web_app.service

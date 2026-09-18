@@ -1,0 +1,87 @@
+# Compose file the fixture estate's "data" stack was deployed from.
+services:
+  postgres:
+    image: docker.io/library/postgres:16.4
+    environment:
+      POSTGRES_DB: app
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - backups:/backups
+      - /etc/localtime:/etc/localtime:ro
+    secrets: [postgres_password]
+    stop_grace_period: 60s
+    stop_signal: SIGINT
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    sysctls:
+      kernel.shmmax: 1073741824
+    ulimits:
+      nofile: 16384
+    deploy:
+      replicas: 1
+      endpoint_mode: dnsrr
+      placement:
+        constraints: ["node.labels.db == true"]
+      resources:
+        limits: { cpus: "2", memory: 2G }
+        reservations: { memory: 1G }
+      update_config: { parallelism: 1, failure_action: pause, monitor: 5s, order: stop-first }
+    networks:
+      backend:
+        aliases: [postgres, db]
+  exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
+    environment:
+      DATA_SOURCE_URI: postgres:5432/app?sslmode=disable
+      DATA_SOURCE_USER: app
+      DATA_SOURCE_PASS_FILE: /run/secrets/postgres_password
+    secrets: [postgres_password]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    ports:
+      - target: 9187
+        published: 9187
+        mode: host
+    deploy:
+      replicas: 1
+      placement:
+        constraints: ["node.labels.db == true"]
+      resources:
+        limits: { memory: 128M }
+    depends_on: [postgres]
+    networks:
+      backend:
+        aliases: [exporter]
+      monitoring: {}
+networks:
+  backend:
+    driver: overlay
+    internal: true
+    driver_opts: { encrypted: "" }
+    ipam:
+      config: [{ subnet: 10.10.2.0/24, gateway: 10.10.2.1 }]
+  monitoring:
+    driver: macvlan
+    driver_opts: { parent: eth1 }
+    ipam:
+      config: [{ subnet: 192.168.50.0/24, gateway: 192.168.50.1, ip_range: 192.168.50.128/25 }]
+volumes:
+  pgdata: {}
+  backups:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: addr=10.0.0.50,rw,nfsvers=4
+      device: ":/exports/backups"
+secrets:
+  postgres_password:
+    external: true
+    name: data_postgres_password

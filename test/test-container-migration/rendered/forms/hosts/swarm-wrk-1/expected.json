@@ -1,0 +1,62 @@
+{
+  "hostname": "swarm-wrk-1",
+  "units": [
+    "data_exporter.service",
+    "data_postgres-health.service",
+    "data_postgres-restart.service",
+    "data_postgres.service",
+    "web_app-health.service",
+    "web_app-restart.service",
+    "web_app.service"
+  ],
+  "targets": [
+    "data.target",
+    "web.target"
+  ],
+  "slices": [
+    "stack-data.slice",
+    "stack-web.slice"
+  ],
+  "timers": [
+    "data_postgres-health.timer",
+    "web_app-health.timer"
+  ],
+  "mounts": [
+    "var-lib-data-data_backups.mount"
+  ],
+  "sockets": [],
+  "machines": [],
+  "containers": [],
+  "secrets": [],
+  "networks": [
+    "data_backend",
+    "data_monitoring",
+    "web_frontend"
+  ],
+  "ports": [
+    {
+      "port": 9187,
+      "protocol": "tcp"
+    },
+    {
+      "port": 8080,
+      "protocol": "tcp"
+    }
+  ],
+  "credentials": [
+    "data_postgres_password",
+    "web_app-app-secret-key",
+    "web_app_signing_key"
+  ],
+  "images": [
+    "/var/lib/machines/prometheuscommunity-postgres-exporter_v0.15.0.mstack",
+    "/var/lib/machines/library-postgres_16.4.mstack",
+    "/var/lib/machines/acme-app_2026.09.mstack"
+  ],
+  "volumes": [
+    "/var/lib/data/data_pgdata",
+    "/var/lib/data/data_backups",
+    "/var/lib/web/web_cache"
+  ],
+  "root_kind": "RootMStack"
+}

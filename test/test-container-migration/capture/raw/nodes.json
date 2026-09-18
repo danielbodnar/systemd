@@ -1,0 +1,8 @@
+[
+  { "ID": "n1", "Spec": { "Role": "manager", "Availability": "active", "Labels": { "tier": "edge" } },
+    "Description": { "Hostname": "swarm-mgr-1", "Platform": { "Architecture": "x86_64", "OS": "linux" }, "Resources": { "NanoCPUs": 4000000000, "MemoryBytes": 8589934592 }, "Engine": { "EngineVersion": "27.3.1", "Labels": {} } },
+    "Status": { "State": "ready", "Addr": "10.0.0.11" }, "ManagerStatus": { "Leader": true, "Reachability": "reachable", "Addr": "10.0.0.11:2377" } },
+  { "ID": "n2", "Spec": { "Role": "worker", "Availability": "active", "Labels": { "db": "true" } },
+    "Description": { "Hostname": "swarm-wrk-1", "Platform": { "Architecture": "x86_64", "OS": "linux" }, "Resources": { "NanoCPUs": 8000000000, "MemoryBytes": 17179869184 }, "Engine": { "EngineVersion": "27.3.1", "Labels": { "storage": "ssd" } } },
+    "Status": { "State": "ready", "Addr": "10.0.0.12" } }
+]

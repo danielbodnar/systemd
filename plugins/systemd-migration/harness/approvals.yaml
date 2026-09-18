@@ -1,0 +1,101 @@
+# Approval policy applied by `swarm-agent run` to tool calls that pause for
+# confirmation (permission policy `always_ask`, or `auto` with no server
+# determination). Rules are evaluated top to bottom; the first match wins, so
+# the deny rules come first and the allow rules cannot shadow them. `match` is
+# a regular expression tested against the tool's command (bash), path (read,
+# write, edit), or serialized input (other tools). When nothing matches, the
+# default applies: `ask` prompts the operator on a terminal and denies without
+# one.
+default: ask
+rules:
+  # Secret values are never read by an agent.
+  - tool: bash
+    match: 'secrets/values|/etc/swarm-migration/secrets|/etc/credstore|/run/credentials'
+    decision: deny
+    reason: secret values are off limits
+  - tool: read
+    match: 'secrets/values|/etc/swarm-migration/secrets|/etc/credstore|/run/credentials'
+    decision: deny
+    reason: secret values are off limits
+  - tool: write
+    match: 'secrets/values|/etc/swarm-migration/secrets|/etc/credstore|/run/credentials'
+    decision: deny
+    reason: secret values are off limits
+  - tool: edit
+    match: 'secrets/values|/etc/swarm-migration/secrets|/etc/credstore|/run/credentials'
+    decision: deny
+    reason: secret values are off limits
+  # Writes land only in the migration artifacts. The worker already refuses
+  # read_only_roots and denied_paths; this is the operator-visible gate on top.
+  - tool: write
+    match: '^/(etc|usr|var/lib/containers|run|boot)/'
+    decision: deny
+    reason: host paths are installed by the runbook, never by an agent
+  - tool: edit
+    match: '^/(etc|usr|var/lib/containers|run|boot)/'
+    decision: deny
+    reason: host paths are installed by the runbook, never by an agent
+  - tool: write
+    match: '(^|/)(rendered|reports|hosts|capture[^/]*)/|(^|/)(MIGRATION-PLAN\.md|inventory\.json|host-map\.json|plan\.yaml|QUESTIONS\.md)$'
+    decision: allow
+    reason: migration artifact inside the workspace
+  - tool: edit
+    match: '(^|/)(rendered|reports)/|(^|/)(MIGRATION-PLAN\.md|inventory\.json|host-map\.json)$'
+    decision: allow
+    reason: migration artifact inside the workspace
+  # Anything that changes the swarm or the host is denied outright; the
+  # runbook, not the agent, performs those steps. Container creation and exec
+  # are included because, given any socket, they are a root-equivalent path
+  # onto the host (docker run --privileged -v /:/host), and the worker unit
+  # deliberately keeps swarm-agent out of the docker group for the same reason.
+  - tool: bash
+    match: '\b(docker\s+(run|exec|cp|create|start|restart|stop|kill|attach|commit|build|buildx|load|import|export|save|login|logout|compose|context|update|pause|unpause|rename|system\s+prune|container\s+(run|exec|cp|create|start|restart|stop|kill|rm|attach|commit|export|update|pause|unpause|rename|prune)|image\s+(rm|prune|push|load|import|build)|plugin\s+(install|rm|remove|enable|disable|upgrade|set)|(service|stack|node|swarm|network|volume|secret|config)\s+(update|deploy|rm|remove|create|leave|join|scale|prune|promote|demote|init|connect|disconnect))|systemctl\s+(start|stop|restart|enable|disable|daemon-reload|reset-failed)|podman\s+(run|exec|cp|create|start|restart|rm|stop|kill|attach|commit|build|load|import|export|save|login|secret\s+create|system\s+(reset|prune))|install\.sh|import-secrets\.sh|rm\s+-rf|mkfs|dd\s+if=)'
+    decision: deny
+    reason: mutating operation reserved for the operator runbook
+  # systemd image, machine, extension, and network tools: listing and showing
+  # are fine; pulling, attaching, merging, starting, mounting, and editing are
+  # runbook steps for the operator.
+  - tool: bash
+    match: '\b(importctl|machinectl|portablectl|systemd-sysext|systemd-confext|systemd-mstack|systemd-vmspawn|systemd-nspawn|systemd-dissect|networkctl)\s+(-[A-Za-z-]+\s+)*(pull-[a-z]+|import-[a-z]+|export-[a-z]+|attach|reattach|detach|merge|unmerge|refresh|start|stop|poweroff|reboot|terminate|kill|remove|clone|rename|read-only|set-limit|clean|mount|umount|edit|reload|reconfigure|renew|forcerenew|up|down|delete|--mount|--umount|--discard|--copy-to|--copy-from|--make-archive|--boot|--with)\b'
+    decision: deny
+    reason: image, machine, extension, or network mutation reserved for the operator runbook
+  - tool: bash
+    match: '^\s*(importctl|machinectl|portablectl|systemd-sysext|systemd-confext|networkctl|systemd-dissect)\s+(-[A-Za-z-]+\s+)*(list|list-images|list-transfers|status|show|inspect|is-attached|cat-config|--discover|--json|-l\b|-J\b)\b'
+    decision: allow
+    reason: read-only systemd tool query
+  # The rollout controller. `status` and any --dry-run form only read and
+  # print the commands they would run, so they are allowed; every other verb
+  # restarts units on the host, so it asks, and the operator sees the dry-run
+  # sequence before agreeing. The path is a plain one ending in stackctl,
+  # optionally through sh; anything else around the name falls through.
+  - tool: bash
+    match: '^\s*((sh|bash)\s+)?(/|\./|\.\./)?([A-Za-z0-9._-]+/)*stackctl\s+status\s+[A-Za-z0-9._-]+\s*$'
+    decision: allow
+    reason: read-only rollout query
+  - tool: bash
+    match: '^\s*((sh|bash)\s+)?(/|\./|\.\./)?([A-Za-z0-9._-]+/)*stackctl\s+(deploy|rollback|drain|activate|scale|rotate|status)(\s+[A-Za-z0-9._/=:@%+-]+)*\s+--dry-run(\s+[A-Za-z0-9._/=:@%+-]+)*\s*$'
+    decision: allow
+    reason: rollout dry run; it prints the commands and changes nothing
+  - tool: bash
+    match: '(^|/|\s)stackctl\s+(deploy|rollback|drain|activate|scale|rotate)\b'
+    decision: ask
+    reason: this restarts units on the host; dry-run it first and show the operator the sequence
+  # Read-only swarm inspection is always fine.
+  - tool: bash
+    match: '^\s*docker\s+(info|version|(node|service|stack|network|volume|secret|config|plugin)\s+(ls|inspect|ps))\b'
+    decision: allow
+    reason: read-only docker query
+  # The plugin skills' scripts, invoked directly: an interpreter, a path made of
+  # plain characters that ends in one of the script names, and plain-character
+  # arguments. Anything else around the script name (a shell wrapper, quotes,
+  # substitutions, a script name inside another command's arguments) does not
+  # match and falls through to the operator.
+  - tool: bash
+    match: '^\s*(bash|bun)\s+(\.?\.?/[A-Za-z0-9._/-]+/|[A-Za-z0-9._-]+/)*(capture\.sh|normalize\.ts|render\.ts|verify\.sh|plan\.ts|review\.ts|plan-map\.ts|build-catalog\.ts|pull-images\.sh|probe\.sh|make-ddi\.sh)(\s+[A-Za-z0-9._/=:,@%+-]+)*\s*$'
+    decision: allow
+    reason: plugin script
+  # Common read-only shell tools.
+  - tool: bash
+    match: '^\s*(ls|cat|head|tail|wc|find|grep|rg|stat|tree|jq|hostname|id|uname|df|free|ss|ip\s+(addr|route|link)|systemctl\s+(status|list-units|list-unit-files|show|is-active|is-enabled|cat)|journalctl|podman\s+(ps|inspect|images|network\s+ls|volume\s+ls|secret\s+ls|version|info)|systemd-analyze\s+verify)\b'
+    decision: allow
+    reason: read-only inspection

@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "origin": { "base_url": "https://api.anthropic.com", "organization_id": "org-test", "workspace_id": "wrkspc_test" },
+  "resources": {
+    "./agents/migration-lead.md": { "kind": "agent", "id": "agent_lead", "version": "3", "hash": "a", "remote_hash": "b" },
+    "./agents/swarm-auditor.md": { "kind": "agent", "id": "agent_auditor", "version": "1", "hash": "a", "remote_hash": "b" },
+    "./environments/production-host.yaml": { "kind": "environment", "id": "env_prod", "hash": "a", "remote_hash": "b" },
+    "./memory_stores/migration-journal.yaml": { "kind": "memory_store", "id": "mem_journal", "hash": "a", "remote_hash": "b" }
+  }
+}

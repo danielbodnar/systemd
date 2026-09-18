@@ -1,0 +1,12 @@
+# Rendered by systemd-service: healthcheck schedule of service data_postgres
+
+[Unit]
+Description=healthcheck timer for data_postgres
+PartOf=data_postgres.service
+After=data_postgres.service
+
+[Timer]
+OnActiveSec=30
+OnUnitActiveSec=10
+Unit=data_postgres-health.service
+AccuracySec=1s

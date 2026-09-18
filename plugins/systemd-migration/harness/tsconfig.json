@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ESNext"],
+    "types": ["@types/bun"],
+    "strict": true,
+    "noUncheckedIndexedAccess": false,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true
+  },
+  "include": [
+    "src/**/*.ts",
+    "test/**/*.ts",
+    "../contract/*.ts",
+    "../scripts/*.ts",
+    "../skills/*/scripts/*.ts"
+  ]
+}

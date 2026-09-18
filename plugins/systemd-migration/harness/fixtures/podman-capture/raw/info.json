@@ -1,0 +1,17 @@
+{
+  "host": {
+    "arch": "amd64",
+    "cgroupManager": "systemd",
+    "cgroupVersion": "v2",
+    "cpus": 4,
+    "distribution": { "distribution": "fedora", "version": "42" },
+    "hostname": "podman-host-1",
+    "kernel": "6.14.5-300.fc42.x86_64",
+    "memTotal": 8589934592,
+    "os": "linux",
+    "security": { "rootless": false, "selinuxEnabled": true },
+    "uptime": "3h 12m 4.00s (Approximately 0.12 days)"
+  },
+  "store": { "graphDriverName": "overlay", "graphRoot": "/var/lib/containers/storage" },
+  "version": { "APIVersion": "5.4.1", "Version": "5.4.1", "Os": "linux", "OsArch": "linux/amd64" }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "systemd-dev-plugins",
+  "owner": {
+    "name": "Daniel Bodnar",
+    "url": "https://github.com/danielbodnar"
+  },
+  "metadata": {
+    "description": "Plugins maintained alongside the systemd source tree. systemd-migration moves container orchestration onto systemd-native primitives: adapters discover an estate (Docker Swarm first, Podman next), a planner writes a plan for review, and one skill per systemd component renders its part of the result."
+  },
+  "plugins": [
+    {
+      "name": "systemd-migration",
+      "source": "./plugins/systemd-migration",
+      "description": "Discover a container estate, plan its move onto systemd, and render every systemd component the plan selects: services with RootMStack=, machines, networkd, resolved, resource control, credentials, journald, storage, extensions, portable services, and Podman Quadlet as an adapter target. Includes the verifier and a Managed Agents harness.",
+      "version": "0.3.0",
+      "category": "infrastructure",
+      "keywords": ["systemd", "docker", "swarm", "podman", "nspawn", "networkd", "mstack", "credentials", "migration", "managed-agents"]
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+# Rendered by docker-image-to-service from swarm service web_app (stack web, mode replicated)
+# The image is the service's root; see the [X-Migration] section for its origin.
+
+[Unit]
+Description=web_app (migrated from Docker Swarm stack web)
+PartOf=web.target
+After=network-online.target
+Wants=network-online.target
+ConditionHost=swarm-wrk-1
+StartLimitBurst=5
+StartLimitIntervalSec=120
+Wants=web_app-health.timer
+
+[Service]
+Type=exec
+Slice=stack-web.slice
+RootMStack=/var/lib/machines/acme-app_2026.09.mstack
+MountAPIVFS=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectProc=invisible
+PrivateUsers=self
+ExecStart=/usr/bin/app serve --port 8080
+WorkingDirectory=/srv/app
+User=1000
+Group=1000
+LoadCredentialEncrypted=web_app-app-secret-key:/etc/credstore.encrypted/web_app-app-secret-key
+Environment=APP_HOME=/srv/app
+Environment=APP_SECRET_KEY_FILE=%d/web_app-app-secret-key
+Environment=DATABASE_URL=postgres://app@data_postgres:5432/app
+Environment=LOG_LEVEL=info
+LoadCredentialEncrypted=web_app_signing_key:/etc/credstore.encrypted/web_app_signing_key
+BindReadOnlyPaths=%d/web_app_signing_key:/run/secrets/signing_key
+TemporaryFileSystem=/tmp:size=67108864
+BindPaths=/var/lib/web/web_cache:/cache
+SocketBindAllow=tcp:8080
+SocketBindDeny=any
+CPUQuota=150%
+MemoryMax=512M
+MemoryLow=128M
+TasksMax=512
+CapabilityBoundingSet=
+NoNewPrivileges=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+LimitNOFILE=65536
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=30
+KillMode=mixed
+SyslogIdentifier=web_app
+LogExtraFields=SWARM_STACK=web SWARM_SERVICE=web_app
+
+[X-Migration]
+Source=docker-swarm
+Stack=web
+Service=web_app
+Image=registry.example.com/acme/app:2026.09
+ImageDigest=sha256:0000000000000000000000000000000000000000000000000000000000000002
+ImageName=acme-app_2026.09
+Renderer=docker-image-to-service

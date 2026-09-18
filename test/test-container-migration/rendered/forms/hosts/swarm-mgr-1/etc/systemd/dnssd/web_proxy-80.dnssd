@@ -1,0 +1,7 @@
+# Rendered by systemd-migration: announces web_proxy port 80/tcp on swarm-mgr-1
+
+[Service]
+Name=web_proxy on %H
+Type=_proxy._tcp
+Port=80
+TxtText=stack=web service=web_proxy
